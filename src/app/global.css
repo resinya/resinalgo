@@ -1,9 +1,250 @@
-@import 'tailwindcss';
-@import 'fumadocs-ui/css/neutral.css';
-@import 'fumadocs-ui/css/preset.css';
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+/*
+ * fumadocs 默认把 docs 布局的总宽限制在 1400px
+ * （grid: 1fr | sidebar | minmax(0, 1400px - sidebar - toc) | toc | 1fr）。
+ * 视口宽于 1400px 时，多出的宽度会被左右两个 1fr 空列平分，
+ * 表现为侧边栏展开后离视口左边缘空出一段、TOC 也离右边缘空出一段。
+ * 改成 100% 让布局撑满视口，空白列归零；正文自身有 max-w-[900px] 且居中，
+ * 不会因为变宽而影响阅读宽度。
+ */
+:root {
+  --fd-layout-width: 100%;
+}
 
 html {
   scrollbar-gutter: stable;
+}
+
+/*
+ * 首页的 Hero 要通栏通到底，不能预留滚动条槽位
+ * （否则深色视频右侧会留出一条 15px 的浅色缝）。
+ * 其他页面（文档页等）保持上面的 stable，避免滚动条出现时页面横向跳动。
+ */
+html:has(#nd-home-layout) {
+  scrollbar-gutter: auto;
+}
+
+/*
+ * 首页主题响应层（.rn-hero-shade，放在 Hero 视频之上、文字之下）。
+ *
+ * 为什么需要它：首页是「整屏视频 + 白字 + 透明导航」，深色和浅色模式下
+ * 画面逐像素完全一致（实测两张截图 byte-level 相同），所以点主题切换
+ * 会让人觉得「切换失效」。这一层只在深色模式淡入，给切换一个明确的反馈。
+ *
+ * 强度就写在这里：改下面 opacity 的值（0.45 = 压暗 45%）。
+ * 压得越重，深浅色模式的差异越明显；想彻底不要压暗就删掉 html.dark 那条。
+ */
+.rn-hero-shade {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+html.dark .rn-hero-shade {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rn-hero-shade {
+    transition: none;
+  }
+}
+
+/*
+ * 首页全屏 Hero：导航栏浮在视频上方时，改成「透明底 + 白字」。
+ * 类名 rn-nav-over-hero 由 HeroBoundary 组件动态加在 <html> 上，
+ * 只在首页、且导航还压着视频时生效；滚过 Hero 自动移除、恢复常规导航。
+ *
+ * 要点 1 —— 透明底不用自己加：fumadocs 在 transparentMode 下本来就不给 <nav> 刷
+ *   bg-fd-background/80（见 @fumadocs/base-ui/dist/layouts/home/slots/header.js 的
+ *   `(open || !isNavTransparent || s.open) && "bg-fd-background/80"`）。
+ *   所以这里只需要把自带的 backdrop-blur 去掉，它就已经是透明的了。
+ *
+ * 要点 2 —— 之前「覆盖 --color-fd-* 变量」那招无效的原因：导航里绝大多数元素
+ *   是用 Tailwind 的 text-fd-* 显式写了 color，不吃继承值。
+ *   所以这次按 class 名反向围剿，把所有显式主题色统一刷成白色；
+ *   hover 态也要一起改，否则鼠标移上去又会变回深色。
+ *
+ * 要点 3 —— 纯透明 + 白字压在视频亮部（云、受光山坡）上仍可能糊，
+ *   因此额外加了「顶部渐隐暗色 + 文字投影」来保证可读性。
+ *   想要完全通透的话，把下面的 ::after 规则整段删掉即可。
+ */
+.rn-nav-over-hero #nd-nav > nav {
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.rn-nav-over-hero #nd-nav {
+  color: #fff;
+  /*
+   * 实测：视频第 8 秒左上角有块 rgb(236,246,250) 的亮云，正好落在三个入口下面，
+   * 纯白字压上去对比度只有 1.45:1（正文要求 4.5:1）；单靠压暗背景要 55% 才够，
+   * 那样导航条就成了一条实心黑带，失去通透感。
+   * 所以改用「轻度渐隐打底 + 多层描边」：近距硬边保证轮廓、中距柔化保证整体分离，
+   * 这是视频字幕的通行做法——背景再亮，字的边缘也是清楚的。
+   */
+  text-shadow:
+    0 0 1px rgba(0, 0, 0, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.75),
+    0 2px 10px rgba(0, 0, 0, 0.55);
+}
+
+.rn-nav-over-hero #nd-nav [class*="text-fd-"] {
+  color: #fff;
+}
+
+.rn-nav-over-hero #nd-nav [class*="hover:text-fd-"]:hover {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.rn-nav-over-hero #nd-nav nav,
+.rn-nav-over-hero #nd-nav nav [class*="border"] {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.rn-nav-over-hero #nd-nav [data-search-full],
+.rn-nav-over-hero #nd-nav kbd {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.rn-nav-over-hero #nd-nav [class*="hover:bg-fd-"]:hover {
+  background-color: rgba(255, 255, 255, 0.22);
+}
+
+/*
+ * 主题切换按钮：让「当前处在哪个模式」一眼可见。
+ *
+ * fumadocs 自带的切换器（@fumadocs/base-ui/dist/layouts/shared/slots/theme-switch.js）
+ * 在 light-dark 模式下渲染成「太阳 + 月亮」两个平级 <svg>，选中态只是给其中一个
+ * 垫一层很淡的 bg-fd-accent 圆底。这个标识本来就很弱，到了首页「透明导航 + 白字」
+ * 状态更是彻底失效——上面的 [class*="text-fd-"] 规则会把两个图标一起刷成白色，
+ * 颜色差异没了；再把 svg 背景清成 transparent，连圆底也没了，于是两边长得一模一样。
+ *
+ * 这里不依赖 fumadocs 那个 active 类，改成直接读 <html> 上的 dark 类来判断选中项：
+ * 浅色模式下第一个 <svg> 是太阳，深色模式下最后一个 <svg> 是月亮，位置是固定的。
+ * 好处是判断依据只有一个（next-themes 写的 html 类），不受组件内部实现影响。
+ *
+ * 区分手段有两个：未选中的压暗，选中的贴一块圆底。
+ *
+ * 选择器故意不限定容器：这个切换器在首页导航栏里（#nd-nav），
+ * 在文档布局里却在左侧边栏底部（#nd-sidebar），两处都要照顾到。
+ */
+[data-theme-toggle] > svg {
+  opacity: 0.4;
+  transition:
+    opacity 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+html:not(.dark) [data-theme-toggle] > svg:first-of-type,
+html.dark [data-theme-toggle] > svg:last-of-type {
+  opacity: 1;
+  /* 用 currentColor 调，圆底自动适配深浅色主题，不用写两套 */
+  background-color: color-mix(in oklab, currentColor 16%, transparent);
+}
+
+/*
+ * 首页透明导航下：选中项改用「实心白圆 + 深色图标」。
+ * 视频画面明暗不定，半透明圆底压上去会糊；纯白实心圆对比度最高，
+ * 而且和导航条自带的 1px 白描边是同一套语言，不会显得突兀。
+ *
+ * 这里必须带 #nd-nav：上面的 `.rn-nav-over-hero #nd-nav [class*="text-fd-"]`
+ * 是一条带 id 的选择器，优先级 (1,2,0)，任何不带 id 的选择器都压不过它。
+ * 少了 #nd-nav 的话，白色会把选中项的图标颜色也刷掉，
+ * 结果是「白圆 + 白图标」，圆里什么都看不见。
+ */
+.rn-nav-over-hero #nd-nav [data-theme-toggle] > svg {
+  color: #fff;
+  background-color: transparent;
+  opacity: 0.5;
+}
+
+.rn-nav-over-hero:not(.dark) #nd-nav [data-theme-toggle] > svg:first-of-type,
+.rn-nav-over-hero.dark #nd-nav [data-theme-toggle] > svg:last-of-type {
+  color: #10151c;
+  background-color: #fff;
+  opacity: 1;
+}
+
+/*
+ * 导航条这一区域的收尾一层：顶部渐隐的暗色，铺在导航内容之下、视频之上。
+ * 压暗在文字所在的 y 区间（约 10~46px）保持较强，到底边快速淡出，
+ * 这样既托住了文字，又不会在导航条下沿留下一条明显的分界线。
+ * 想要完全通透的话，把这段整块删掉即可（描边仍在，只是亮部会略吃力）。
+ */
+.rn-nav-over-hero #nd-nav::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.42) 0%,
+    rgba(0, 0, 0, 0.34) 62%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+/*
+ * 首页动效：只做一次性入场，不循环、不视差。
+ * 用户开启「减少动态效果」时全部退化成静态。
+ */
+@keyframes rn-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rn-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rn-fade {
+  opacity: 0;
+  animation: rn-fade 1.2s ease forwards;
+}
+
+.rn-fade-up {
+  opacity: 0;
+  animation: rn-fade-up 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+.rn-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+}
+
+.rn-reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rn-fade,
+  .rn-fade-up,
+  .rn-reveal,
+  .rn-cue {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 
 html > body[data-scroll-locked] {

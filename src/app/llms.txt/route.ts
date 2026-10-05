@@ -1,4 +1,4 @@
-import { docsLlms } from '@/lib/source';
+import { docsLlms } from "@/lib/source";
 
 export const revalidate = false;
 

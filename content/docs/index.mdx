@@ -1,13 +1,23 @@
 ---
-title: Hello World
-description: Your first document
+title: 关于 resin-notes
+description: 站主的 AI Agent 与工程化笔记站，记录智能体架构、全栈落地实践
 ---
 
-Welcome to the docs! You can start writing documents in `/content/docs`.
+这里是 **树脂** 的技术笔记站，用来沉淀 AI Agent 相关的阅读、实践与复盘。
 
-## What is Next?
+不追求教程式的完整，更像工程现场的手记：一个决策为什么这么下，一个坑是怎么绕过去的，
+当时的结论是什么。笔记会随实践持续更新，前后观点不一致时以最近更新的为准。
 
-<Cards>
-  <Card title="Learn more about Next.js" href="https://nextjs.org/docs" />
-  <Card title="Learn more about Fumadocs" href="https://fumadocs.dev" />
-</Cards>
+## 主要写什么
+
+- **Agent 架构与编排**：单智能体与多智能体的职责划分，工作流编排、状态机与循环控制，
+  LangGraph 这类图式编排的落地方式
+- **上下文工程**：Prompt 的组织方式、上下文窗口的预算分配、长上下文的裁剪与压缩策略
+- **工具与外部世界**：Tool Calling / Function Calling、MCP 接入、工具粒度设计与失败恢复
+- **检索与记忆**：RAG 链路、向量与混合检索、Agent 的短期与长期记忆、状态持久化
+- **评测与可观测**：离线评测集、在线 A/B、Trace 与日志、成本与延迟监控
+- **工程化落地**：TypeScript / Next.js 侧的流式输出、鉴权与限流、部署与 CI/CD
+
+## 阅读方式
+
+左侧目录按主题翻阅，每篇尽量给出可复现的代码片段和当时的结论。代码以 TypeScript 为主。
