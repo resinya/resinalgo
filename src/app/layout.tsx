@@ -24,6 +24,9 @@ export const metadata: Metadata = {
   creator: author.name,
   publisher: author.name,
   category: "technology",
+  icons: {
+    icon: "https://resin-notes.oss-cn-hangzhou.aliyuncs.com/public/resin.jpg",
+  },
   alternates: {
     canonical: "/",
   },
