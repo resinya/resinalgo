@@ -2,9 +2,48 @@ import { createGetUrl } from "fumadocs-core/source";
 
 export const appName = "resin-notes";
 
+const DEFAULT_SITE_URL = "https://resinalgo.vercel.app";
+
+/**
+ * 归一化 NEXT_PUBLIC_SITE_URL。
+ *
+ * 这个值会在构建期被 layout.tsx 拿去执行 `new URL(siteUrl)`，只要它不是合法的
+ * 绝对 URL 就会抛 ERR_INVALID_URL，直接让整个构建失败
+ * （在 Vercel 上的表现就是 "Command pnpm run build exited with 1"）。
+ * 最容易踩的写法错误是漏掉协议头：填 `coderesin.site` 而不是 `https://coderesin.site`。
+ *
+ * 所以这里不直接信任环境变量，做三步兜底：补协议 → 去尾部斜杠 → 解析失败回退默认值。
+ * 构建日志里会打出警告，方便部署时发现填错，但绝不会因此中断构建。
+ */
+function resolveSiteUrl(value: string | undefined): string {
+  const trimmed = value?.trim();
+  if (!trimmed) return DEFAULT_SITE_URL;
+
+  const hasScheme = /^https?:\/\//i.test(trimmed);
+  if (!hasScheme) {
+    console.warn(
+      `[resin-notes] NEXT_PUBLIC_SITE_URL 缺少协议头（收到 "${trimmed}"），已自动按 https:// 处理。` +
+        "建议在 Vercel 环境变量里改成完整地址。",
+    );
+  }
+
+  try {
+    const url = new URL(hasScheme ? trimmed : `https://${trimmed}`);
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      throw new Error("仅支持 http/https");
+    }
+    // origin 不含路径，根路径的 "/" 顺手去掉，得到规范化结果
+    return url.pathname === "/" ? url.origin : url.origin + url.pathname;
+  } catch {
+    console.warn(
+      `[resin-notes] NEXT_PUBLIC_SITE_URL 不是合法地址（收到 "${trimmed}"），已回退到 ${DEFAULT_SITE_URL}。`,
+    );
+    return DEFAULT_SITE_URL;
+  }
+}
+
 // 部署后如果有自定义域名，在 Vercel 配 NEXT_PUBLIC_SITE_URL 覆盖即可
-export const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://resinalgo.vercel.app";
+export const siteUrl = resolveSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
 
 export const siteTitle = `${appName} · 树脂的 AI Agent 笔记`;
 
@@ -99,9 +138,28 @@ export const avatarUrl =
  * 想改起点就改这个字符串——写成带时区偏移的本地时间最直观，
  * 例如 "2026-10-05T00:00:00+08:00" 表示北京时间 2026-10-05 零点。
  */
-export const siteLaunchAt =
-  configured(process.env.NEXT_PUBLIC_SITE_LAUNCH_AT) ??
-  "2026-10-05T00:00:00+08:00";
+export const siteLaunchAt = resolveLaunchAt(
+  process.env.NEXT_PUBLIC_SITE_LAUNCH_AT,
+);
+
+/**
+ * 校验上线时间。填了非法日期字符串时 new Date() 会得到 Invalid Date，
+ * 计时器会一路显示 NaN；这里退回默认值并在构建日志里警告。
+ */
+function resolveLaunchAt(value: string | undefined): string {
+  const fallback = "2026-10-05T00:00:00+08:00";
+  const trimmed = value?.trim();
+  if (!trimmed) return fallback;
+
+  if (Number.isNaN(new Date(trimmed).getTime())) {
+    console.warn(
+      `[resin-notes] NEXT_PUBLIC_SITE_LAUNCH_AT 不是合法时间（收到 "${trimmed}"），已回退到 ${fallback}。`,
+    );
+    return fallback;
+  }
+
+  return trimmed;
+}
 
 export const categories = [
   {
