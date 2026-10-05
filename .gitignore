@@ -22,5 +22,9 @@ yarn-error.log*
 
 # others
 .env*.local
+# 仓库自带的 .env 里只有空模板值，会被 Vercel 当作「空字符串」加载，
+# 因此不提交它（真实值用 .env.local 本地 / Vercel 控制台填写）。
+# .env.example 是模板，保留在仓库里。
+.env
 .vercel
 next-env.d.ts

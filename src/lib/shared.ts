@@ -10,14 +10,23 @@ const DEFAULT_SITE_URL = "https://resinalgo.vercel.app";
  * 这个值会在构建期被 layout.tsx 拿去执行 `new URL(siteUrl)`，只要它不是合法的
  * 绝对 URL 就会抛 ERR_INVALID_URL，直接让整个构建失败
  * （在 Vercel 上的表现就是 "Command pnpm run build exited with 1"）。
- * 最容易踩的写法错误是漏掉协议头：填 `coderesin.site` 而不是 `https://coderesin.site`。
+ * 最容易踩的两种填法：
+ *   - 完全没填 / 填了空值：Vercel 加载仓库里的 .env 后变量变成空字符串 ''，
+ *     而 `??` 兜底拦不住空字符串，于是 new URL("") 直接挂（本次 10-05 的真实原因）。
+ *   - 漏掉协议头：填 `coderesin.site` 而不是 `https://coderesin.site`。
  *
  * 所以这里不直接信任环境变量，做三步兜底：补协议 → 去尾部斜杠 → 解析失败回退默认值。
  * 构建日志里会打出警告，方便部署时发现填错，但绝不会因此中断构建。
  */
 function resolveSiteUrl(value: string | undefined): string {
   const trimmed = value?.trim();
-  if (!trimmed) return DEFAULT_SITE_URL;
+  if (!trimmed) {
+    console.warn(
+      `[resin-notes] NEXT_PUBLIC_SITE_URL 为空，已回退到默认值 ${DEFAULT_SITE_URL}。` +
+        "建议在 Vercel 环境变量里填正式域名（带 https://），否则 canonical/OG 链接会指向该默认地址。",
+    );
+    return DEFAULT_SITE_URL;
+  }
 
   const hasScheme = /^https?:\/\//i.test(trimmed);
   if (!hasScheme) {
@@ -102,8 +111,9 @@ export const keywords = [
 /**
  * 首页 Hero 视频源。
  *
- * 默认读 public/ 下的本地文件；如果视频放到对象存储（OSS/COS/R2 等），
- * 在部署环境配对应的 NEXT_PUBLIC_HERO_* 环境变量即可，代码不用动。
+ * 默认直接指向对象存储（OSS）上的正式地址，所以「什么环境变量都不配」也能正常播放；
+ * 如果视频换存储或换文件，在部署环境配对应的 NEXT_PUBLIC_HERO_* 环境变量即可覆盖，
+ * 代码不用动。
  *
  * 注意 NEXT_PUBLIC_ 变量是**构建时内联**的：改了之后要重新部署才生效。
  * 本地开发写在项目根目录的 .env.local 里（该文件已在 .gitignore 中）。
@@ -113,15 +123,23 @@ export const keywords = [
  * 所以额外做一次 trim 判断，避免产生空的 src。
  */
 function configured(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
+const OSS_BASE = "https://resin-notes.oss-cn-hangzhou.aliyuncs.com/public";
+
 export const heroVideo = {
-  webm: configured(process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM) ?? "/hero.webm",
-  mp4: configured(process.env.NEXT_PUBLIC_HERO_VIDEO_MP4) ?? "/hero.mp4",
+  webm:
+    configured(process.env.NEXT_PUBLIC_HERO_VIDEO_WEBM) ??
+    `${OSS_BASE}/hero.webm`,
+  mp4:
+    configured(process.env.NEXT_PUBLIC_HERO_VIDEO_MP4) ??
+    `${OSS_BASE}/hero.mp4`,
   poster:
-    configured(process.env.NEXT_PUBLIC_HERO_VIDEO_POSTER) ?? "/hero-poster.jpg",
+    configured(process.env.NEXT_PUBLIC_HERO_VIDEO_POSTER) ??
+    `${OSS_BASE}/hero-poster.jpg`,
 };
 
 /**
