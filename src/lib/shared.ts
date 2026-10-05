@@ -196,6 +196,11 @@ export const categories = [
     title: "技术栈",
     description: "前后端技术文章：语言、框架、运行时与底层原理。",
   },
+  {
+    slug: "algo",
+    title: "算法",
+    description: "leetcode刷题思路",
+  },
 ];
 
 export const docsRoute = "/docs";
