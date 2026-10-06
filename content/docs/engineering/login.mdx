@@ -1,0 +1,341 @@
+---
+title: 登录页抽离
+description: 把登录页从主应用里拆出来：一套独立登录体系的完整设计
+---
+
+# 把登录页从主应用里拆出来：一套独立登录体系的完整设计
+
+## 一、先说问题：一个登录页为什么值得单开一个目录
+
+大多数 Web 应用的登录页，都是主应用路由里的一个页面：`/login` 对应一个组件，用主应用的框架、主应用的构建、主应用的路由守卫。这很自然，直到你遇到下面这些情况：
+
+- 主应用还在加载 JS 包、还在等首屏渲染，用户已经开始输入账号密码了——登录页被迫承担主应用的加载成本。
+- 主应用升级框架版本、改路由结构、调整构建配置，登录页跟着一起动，每次发布都要整体回归。
+- 同一套系统要服务多个品牌（OEM），登录页的 Logo、主题色、公司名称、备案信息都要变，但这些配置散落在组件里。
+- 认证链路牵扯微信扫码、账号绑定、短信验证、滑块验证、角色初始化、租户模块开关，全部塞进主应用会让「登录」这件事的边界变得模糊。
+
+于是我们做了一个决定：**把登录页从主应用里彻底拆出来，做成一个不依赖任何框架构建的静态目录**，用同域 Cookie 会话与主应用衔接，再增加一个「中转页」承担登录后的权限初始化。
+
+本文完整拆解这套体系：目录为什么这样分、代码为什么这样分层、请求怎么走、构建怎么做、发布要注意什么，以及这套方案的代价和适用边界。
+
+## 二、整体架构
+
+```text
+浏览器（同一业务域名）
+   │
+   ├── /login.html ──► 独立登录页静态文件  ──┐
+   ├── /jump.html  ──► 登录中转页静态文件    │
+   ├── /web/**     ──► Next 主应用           │
+   └── /api/**     ──► Java 后端（Cookie 会话）│
+                                             │
+独立登录页 ──► CDN：Vue 全局构建、Axios、Logo、插画
+           └──► 后端：登录、微信、短信、滑块、注册、找回密码
+```
+
+三条关键约束，后面所有设计都由它们推导出来：
+
+1. **登录页、中转页、主应用、后端接口必须在同一个业务域名下。** 浏览器才会自动携带 Cookie，前端才能完全不碰 Token。
+2. **独立登录页不参与主应用的构建。** 它是 HTML + 原生 JS，通过 CDN 引入 Vue 3 全局构建版和 Axios。
+3. **前端不保存任何环境地址。** 接口前缀、主应用路径、品牌配置全部由后端动态注入。
+
+## 三、为什么「单开一个目录」是对的
+
+### 3.1 与主应用彻底解耦
+
+主应用是 Next.js，路由、布局、守卫、拦截器一应俱全。登录页如果长在里面，就要等主应用 hydration 完成才能交互。独立出来之后：
+
+- 登录页的首屏只依赖两个 CDN 脚本和一个 CSS 文件，没有路由、没有代码分割、没有 hydration 等待。
+- 主应用发版不影响登录页，登录页改样式也不需要重新构建整个 Next 应用。
+- 主应用里不再维护第二套登录表单，它只做三件事：加载会话、保护受保护路由、接口 401 时跳转 `/login.html`。
+
+代价是：登录页失去了框架的工程化能力（类型检查、打包压缩、Tree Shaking），需要用别的方式补回来——这就是后面「构建哈希」那一节要解决的问题。
+
+### 3.2 用 Cookie 会话，而不是前端存 Token
+
+整套体系里，前端**不读取、不保存、不拼接任何 Token**。登录成功后由后端写入 Cookie（HttpOnly + Secure + SameSite），后续所有请求通过 `withCredentials` 让浏览器自动携带：
+
+```js
+const http = window.axios?.create({
+  withCredentials: true,
+  timeout: 30000,
+  headers: { Accept: "application/json" },
+});
+```
+
+这样做的好处是 XSS 拿不到会话凭据，代价是必须严格同域——跨域场景下 Cookie 的 Domain、Secure、SameSite 任何一项配错，表现都是「登录成功却又跳回登录页」，排查起来很费时间。
+
+### 3.3 一个中转页，把「认证」和「授权准备」分开
+
+登录成功之后，用户其实还不能直接用系统：角色没初始化、租户模块开关没读、默认首页没算出来。如果这些逻辑写在登录页里，登录页就会越来越重；如果写在主应用里，又要在主应用里再做一遍登录态判断。
+
+于是有了 `/jump.html`：它不做任何输入，只按顺序做三件事，最后算出一个安全的落地页：
+
+```js
+onStage("session");                                   // 1. 确认当前用户
+const userResult = await request("get", "/sys/sysUser/getLoginUserInfo");
+
+onStage("permission");                                // 2. 初始化角色与租户配置
+await request("post", "/sys/sysUser/checkLoginRole");
+const configResult = await request("get", "/sys/tenant/sysTenantSet/getConfig");
+
+onStage("workspace");                                 // 3. 计算默认首页
+const defaultPath = getPostLoginPath(config, user.accountType, isMobile, ...);
+return resolveRedirectTarget(search, defaultPath, runtimeConfig.mainAppBasePath);
+```
+
+页面上是三段进度提示（确认登录状态 → 读取账号权限 → 进入工作台），失败时展示原因并在 1.2 秒后带着 `redirect` 回登录页。这个设计把「用户是谁」和「用户能进哪」拆成了两个阶段，两边各自可测。
+
+### 3.4 配置由后端注入，一套代码服务多品牌
+
+登录页里没有一行「如果是 A 品牌就显示这个 Logo」的判断。页面加载时读取后端注入的公开配置对象，原样使用：
+
+```js
+export function validateLoginRuntimeConfig(config) {
+  const runtimeConfig = config ?? window._$xconfig?.appOemConfig;
+  if (
+    !runtimeConfig ||
+    typeof runtimeConfig !== "object" ||
+    Array.isArray(runtimeConfig) ||
+    Object.keys(runtimeConfig).length === 0
+  ) {
+    throw new Error("登录配置未注入");
+  }
+  return runtimeConfig;
+}
+```
+
+配置里有：接口前缀、主应用基础路径、品牌名、Logo、主题色、插画、备案信息、微信登录开关。前端只校验「根对象存在」，不判断 hostname、不区分环境。这样一套静态文件可以部署给多个品牌，换品牌只改后端配置，不用重新打包。
+
+### 3.5 没有构建工具，就用内容哈希做版本控制
+
+这是「单开目录」方案最容易被质疑的点：不用 Webpack/Vite，改了 CSS 或 JS 之后，用户浏览器缓存怎么失效？
+
+答案是构建脚本给每个文件算 12 位 SHA-256 内容哈希，把 `?v=哈希` 回写进所有引用它的地方。文件内容一变，哈希就变，引用就变，浏览器自然重新拉取。细节在第六节展开。
+
+## 四、目录结构：每一个文件为什么存在
+
+```text
+frontend/mypage/login/
+├── login.html              登录页结构 + Vue 模板
+├── jump.html               中转页结构
+├── css/login.css           全部样式（单屏布局、弹窗、滑块、响应式）
+├── js/
+│   ├── login.js            登录页业务逻辑（Vue 挂载、接口调用、各业务流程）
+│   ├── jump.js             中转页校验与跳转
+│   ├── login-core.js       纯函数层（可单测，无副作用）
+│   └── login-config.js     运行时配置读取与校验
+├── scripts/
+│   └── stamp-assets.mjs    构建：算哈希、回写引用、拷贝到输出目录
+├── tests/                  login-core / jump / login-config / 登录过渡 的单元测试
+├── nginx/                  发布环境需要的 Nginx 规则样例
+└── README.md               开发、调用链与发布手册
+```
+
+两个容易踩坑的点：
+
+- **`frontend/web/mypage/` 是构建产物，不是第二份源码。** 它由 `stamp-assets.mjs` 生成，手工改它会在下一次构建时被覆盖。
+- **开发和生产走两条不同的服务路径。** 开发时由主应用的开发服务器挂载静态目录并代理后端；生产时由 Nginx 直接托管静态文件并代理接口。两条路径的 URL 必须保持一致，否则本地好的功能上线就 404。
+
+## 五、代码分层：把「能测的」和「只能跑在浏览器里的」分开
+
+这是这套静态页能维持可读性的关键。三个 JS 文件职责严格区分：
+
+### 5.1 纯函数层 `login-core.js`
+
+没有任何 DOM 依赖，不碰网络，全部是输入到输出的映射，可以单独跑测试：
+
+| 函数                                          | 职责                                               |
+| --------------------------------------------- | -------------------------------------------------- |
+| `buildApiUrl` / `normalizeBaseUrl`            | 拼接接口地址，避免重复或缺少斜杠                   |
+| `buildMainAppPath`                            | 拼接主应用路径                                     |
+| `isValidPhone`                                | 手机号格式校验（注册、短信、绑定场景）             |
+| `validateRegistrationFields`                  | 注册字段逐项校验，返回字段级错误                   |
+| `getPostLoginPath`                            | 按租户模块开关 + 账号类型 + 是否移动端，算默认首页 |
+| `resolveRedirectTarget` / `isSafeMainAppPath` | 安全回跳判定                                       |
+| `getRequestErrorMessage`                      | 把各种错误形态统一成一句中文提示                   |
+
+其中 `getPostLoginPath` 是业务规则的集中地，读起来就是一张决策表：移动端优先私域模块 → 公域模块 → 租户页 → 无权限页；桌面端优先创作模块 → 私域 → 公域 → 兜底路径。规则集中在这里，测试也只需要覆盖这一个文件。
+
+### 5.2 配置层 `login-config.js`
+
+只有十几行，职责是「读取后端注入的配置，并在缺失时给出明确错误」。它不做字段兜底、不做默认值填充——配置缺了就该在页面上报「登录配置未注入」，而不是悄悄用一个错误的环境继续跑。
+
+### 5.3 业务层 `login.js`
+
+最大的文件，负责 Vue 挂载和全部业务流程。它内部也有规律：
+
+- 启动链：`bootstrapLoginPage` → 挂载 Vue → 读配置 → 应用品牌 → 绑定事件 → 初始化地区选择 → 开放交互。
+- 所有请求走统一的 `request` 方法，统一判断业务 `code !== 200` 并转成中文错误。
+- 业务分支各自成函数：`handleAccountLogin`、`handleWechatCallback`、`renderWechatQr`、`loadWechatPending`、`handleWechatBinding`、`handleRegister`、`handleForgotPassword`、`openSliderVerification`、`verifySliderAndSendSms`……
+- Vue 只承担「表单状态与事件绑定」，大量 DOM 操作（弹窗、滑块、地区三级联动）仍是原生实现，这是刻意的选择：静态页没有构建工具，引入过重的框架用法会让文件迅速失控。
+
+一个值得注意的兼容细节，账号登录特意用了表单编码而不是 JSON：
+
+```js
+// 现网后端仍使用旧的表单解析，新后端同时接受表单和 JSON。
+// 使用 URL 编码的表单数据可以让独立登录页同时兼容两个版本。
+await request(
+  "post",
+  "/common/login",
+  new URLSearchParams({ username, password }),
+  {
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  },
+);
+```
+
+这种「为了兼容旧后端而放弃更现代写法」的取舍，必须在代码里写明原因，否则半年后没人敢动它。
+
+## 六、构建：一个不算编译、只算哈希的脚本
+
+`yarn build:login` 执行的是 `scripts/stamp-assets.mjs`，它做四件事：
+
+1. 读取源目录下的 CSS 和 JS。
+2. 对每个文件计算 12 位 SHA-256 内容哈希。
+3. 把 `?v=哈希` 回写进引用处——HTML 里的 `<link>`/`<script>`，以及 ES Module 之间的 `import`：
+
+```js
+login = stampReference(login, "./login-core.js", coreHash);
+login = stampReference(login, "./login-config.js", configHash);
+html = stampReference(html, "/web/mypage/login/js/login.js", loginHash);
+```
+
+4. 把带哈希的成品拷贝到输出目录。
+
+三个必须知道的约束：
+
+- **这不是「只检查」的脚本，它会改文件。** CSS 或 JS 内容变化后，`login.html`、`login.js` 里的哈希引用会被自动更新，这些变化必须和源文件一起提交、一起发布。
+- **不要手工填 `?v=`。** 手写日期或自增编号会导致「内容没变但 URL 变了」（多余刷新）或「内容变了但 URL 没变」（用户看到旧版本）。
+- **所有文件要作为一组发布。** 新 HTML 引用了新哈希的 JS，只上传其中一个必然 404 或版本错配。
+
+引用缺失时脚本会直接报错停下来，而不是静默跳过：
+
+```js
+if (!pattern.test(source)) {
+  throw new Error(`[build:login] 缺少可更新的资源引用：${assetPath}?v=...`);
+}
+```
+
+主应用的 `build` / `build:prod` 会把 `build:login` 挂在最后一步执行，所以完整构建不会漏掉这一步。
+
+## 七、请求与流程
+
+### 7.1 账号登录
+
+```text
+打开 /login.html
+  → 依次加载 CDN 的 Axios、Vue
+  → 加载 login.js 并挂载
+  → 读取后端注入配置
+  → 输入账号密码 → POST /common/login（后端写 Cookie）
+  → 跳转 /jump.html
+  → 校验用户 → 初始化角色 → 读租户配置 → 算默认首页
+  → 有安全 redirect 就回原页面，否则进模块默认首页
+```
+
+登录成功**不直接进主应用**，而是先进中转页，这是整套设计里最容易被问「为什么要多跳一次」的地方。答案在 3.3：登录只证明「你是你」，中转页才解决「你能进哪」。
+
+### 7.2 微信扫码登录
+
+比账号登录复杂得多，也是唯一必须依赖后端状态的流程：
+
+1. 前端请求扫码配置，拿到 `appId`、`scope`、`redirectUri`、`state`。
+2. 后端在 Redis 里保存一次性 `state` 并写入校验 Cookie。
+3. 前端加载微信的 `wxLogin.js` 生成二维码。
+4. 用户扫码确认，微信回调后端；后端原子读取并删除 `state`，校验 Cookie 与域名。
+5. 已绑定 → 直接建立会话，跳回 `/login.html?wechat=success`；未绑定 → 保存待绑定身份，跳回 `?wechat=bind`，前端引导用户验证手机号或补全资料后再完成绑定。
+
+关键安全约定：**AppID、回调地址、`state` 全部由后端动态返回，AppSecret 只存在于后端配置或数据库**，前端包里不能出现任何密钥。前端传的 `platformType`、`applicationCode` 只是兼容参数，不参与应用选择。
+
+### 7.3 注册、找回密码与滑块
+
+注册提交前逐项校验手机号、姓名、密码、确认密码、公司名称、地区，以及按配置决定是否要求短信验证码；错误显示在对应字段下方，校验不通过就不发请求。短信发送前必须通过滑块验证，滑块松手即校验，只有明确返回通过才继续。
+
+### 7.4 安全回跳
+
+这是静态页最容易被忽略的攻击面。`redirect` 参数如果直接信任，攻击者可以构造一个「登录后跳转到第三方站点」的链接。这里的防御是层层收紧的：
+
+```js
+export function isSafeMainAppPath(value, mainAppBasePath) {
+  if (typeof value !== "string") return false;
+  if (
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    /[\\\s\u0000-\u001f\u007f]/.test(value)
+  )
+    return false;
+  try {
+    const parsed = new URL(value, "https://login.local");
+    if (/%(?:2f|5c|2e|25)/i.test(parsed.pathname)) return false; // 拒绝编码后的分隔符和点路径
+    const mainAppHomePath = buildMainAppPath(mainAppBasePath);
+    return (
+      parsed.origin === "https://login.local" &&
+      (parsed.pathname === mainAppHomePath ||
+        parsed.pathname.startsWith(`${mainAppHomePath}/`))
+    );
+  } catch {
+    return false;
+  }
+}
+```
+
+四道防线：必须以单斜杠开头且不能是协议相对路径 `//` → 不含反斜杠、空白和控制字符 → 拒绝百分号编码的斜杠、反斜杠和点（防止二次解码绕过）→ 必须落在主应用受保护路径之内。
+
+### 7.5 主应用侧的衔接
+
+主应用启动时会加载后端返回的动态会话脚本，脚本只设置一个全局对象；守卫脚本以 50ms 的间隔轮询这个对象，8 秒内拿到用户 ID 就放行，否则跳转登录页。**不依赖自定义事件**——事件可能早于监听注册就已经派发，轮询虽然笨，但在这种跨页面、无构建的场景里更可靠。
+
+接口层统一处理 HTTP 401 和业务 `code=401`，清理内存态后跳登录页，并保证只跳一次。
+
+## 八、发布：五个独立单元，别混着发
+
+独立登录页、主应用、后端、数据库迁移、CDN 资源是五个发布单元，改哪个发哪个，不要为了登录页改个样式去重启后端。
+
+发布登录页的最小动作：
+
+1. 确认改动范围，执行 `yarn build:login`，跑相关测试。
+2. 再看一次 diff——哈希回写是预期变化，其他意外变化要先处理。
+3. 上传这一组文件：`login.html`、`jump.html`、`css/`、`js/`、图片资源。目录层级必须是平的，不要多套一层时间戳目录（这是线上 404 最常见的原因）。
+4. 只有 Nginx 规则变了才需要 `nginx -t` 后 reload；只换静态文件不需要重启任何服务。
+
+Nginx 侧的关键规则：登录页和中转页用精确 `alias` 映射且响应头为 `no-store`；CSS/JS 至少 `no-cache` 并配合内容哈希；旧的 `/web/login*` 入口 302 到 `/login.html` 保持兼容；接口前缀代理到后端。
+
+验收时至少确认这几件事：无 Cookie 访问受保护页面会跳登录页并带上 `redirect`；登录后经过中转页回到原页面；错误密码只提示不跳转；退出登录后回到登录页；桌面、手机竖屏、手机横屏都不出现页面级滚动。
+
+## 九、本地开发
+
+两种方式，取决于你要改什么：
+
+- **和主应用一起跑**：`yarn dev`，开发服务器同时提供登录页、中转页、主应用，并把接口代理到本地后端。适合联调登录后的跳转和主应用衔接。
+- **只跑登录页**：`yarn dev:login`，单独起一个静态服务并把接口代理到本地后端，端口和后端地址都能用环境变量覆盖。调试服务只监听本地地址，不会暴露到局域网。
+
+要注意的是：直接用编辑器自带的静态服务器打开页面，页面能显示，但所有接口都调不通——它不代理后端。接口联调必须用上面两种方式之一。
+
+## 十、这套方案的代价与适用边界
+
+诚实地说，这套设计不是没有成本：
+
+- **放弃了类型检查和构建期优化。** 靠纯函数分层 + 单元测试 + 构建校验脚本补回来，但仍然比不上 TypeScript 全量覆盖。
+- **出现了两份「入口」心智模型。** 主应用和登录页各自有一套启动逻辑，新人容易搞不清 `/login.html` 和 `/web/login` 的关系，需要靠文档和 README 兜住。
+- **哈希机制依赖纪律。** 只要有人手工改了 `?v=` 或者只上传了部分文件，线上就会出问题。
+- **同域是硬约束。** 一旦需要真正的跨端、跨域登录（比如独立的账号中心域名），Cookie 方案就要换成带 PKCE 的授权码流程，这套体系需要重新设计。
+- **文档与代码可能脱节。** 例如手册里描述的部分辅助脚本在实际目录中并不存在，发布前应以代码为准核对，不要照着文档去执行不存在的命令。
+
+**什么时候适合这样拆**：主应用较重、登录链路复杂（微信/短信/滑块/多品牌）、希望登录页独立发版、且能保证同域。
+
+**什么时候不该这样拆**：登录只是简单表单、没有多品牌诉求、团队没有精力维护文档与构建纪律——这时候把它放回主应用路由里，反而是更省心的选择。
+
+## 十一、落地检查清单
+
+- [ ] 登录页、中转页、主应用、接口同域；Cookie 的 Domain / Secure / SameSite / HTTPS 配置正确。
+- [ ] 前端代码里没有任何密钥、任何环境域名、任何硬编码的接口地址。
+- [ ] 所有回跳都经过安全判定，不接受外域地址和编码绕过的路径。
+- [ ] 每次改动都执行了 `build:login`，并把哈希回写的变化一并提交发布。
+- [ ] 发布以「同一次构建的一组文件」为单位，目录层级扁平正确。
+- [ ] 纯函数层有测试覆盖；业务规则变化先改测试再改实现。
+- [ ] 登录页本地资源与 CDN 资源的关系清晰，覆盖同名 CDN 对象后知道如何刷新缓存。
+- [ ] README 与代码一致，手册里提到的脚本和目录真实存在。
+
+---
+
+拆一个登录页出来，本质上不是「少了框架」这么简单，而是**把认证这件事的边界显式化**：谁负责证明身份、谁负责决定能去哪、谁负责渲染、谁负责发布。边界清楚了，登录页才能独立演进，主应用才能只关心自己的事。
