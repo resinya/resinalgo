@@ -1,0 +1,302 @@
+---
+title: 发布策略
+---
+
+> 这篇内容主要是用来去理解，上线发布策略，理解什么是蓝绿测试？什么是冒烟测试？什么是灰度？
+
+# 什么是冒烟测试？
+
+**不是流量策略，是测试类型**
+
+> 名字来源：硬件维修通电，看有没有冒烟，只要不冒烟说明基础通路没问题。
+
+- 含义：版本部署完成后，**快速、核心流程的验证**，只测最关键主干功能，不做全面回归。
+- 目的：确认新版本环境能跑、核心链路通，**如果冒烟失败，直接回滚，不继续发布**。
+- 例子：后台部署完新服务，调用登录、下单接口，看能不能正常返回；只要核心接口报错，立刻回滚。
+
+> 区分：冒烟 ≠ 完整功能测试，只测主干，速度快。
+
+### 体现形式
+
+1. CI/CD 流水线中的自动化脚本（最主流）
+   每次你 git push 或提交 MR/PR 时，流水线会自动触发。
+
+体现：一个独立的测试文件（如 smoke.test.ts 或 test_smoke.py）。
+
+前端实践：使用 Playwright 或 Cypress 脚本，自动打开浏览器，验证首页能否加载、登录按钮是否存在、接口能否调通。
+
+AI 全栈实践：写一个 Python 脚本，调用你的大模型 API，检查是否能返回非空字符串；检查向量数据库（如 ChromaDB/Pinecone）是否能正常连接。
+
+2. 线上发布后的“健康检查”
+   在蓝绿部署或滚动更新后，直接在生产环境跑的最基础测试。如果没通过，立刻回滚。
+
+体现：调用线上核心接口的脚本，或者专门的监控探针。
+
+```js
+import { test, expect } from "@playwright/test";
+
+test("冒烟测试：首页核心元素渲染", async ({ page }) => {
+  // 1. 访问首页
+  await page.goto("http://localhost:3000");
+
+  // 2. 验证核心元素存在
+  const loginBtn = page.locator('button:has-text("登录")');
+  await expect(loginBtn).toBeVisible();
+
+  // 3. 验证接口请求正常（不深入业务，只看状态码）
+  const response = await page.request.get("http://localhost:3000/api/health");
+  expect(response.status()).toBe(200);
+});
+```
+
+```bash
+# 安装 Playwright
+npm install -D @playwright/test
+npx playwright install
+
+# 运行冒烟测试（通过 grep 或 tag 过滤）
+npx playwright test tests/smoke.spec.ts
+```
+
+触发条件，在yml文件或者dockerfile上，促发这个命令跑测试代码
+
+# 蓝绿发布
+
+**两套完全一样的环境：蓝、绿**
+
+- 蓝：当前线上正在跑的稳定版本；绿：部署好的新版本。
+- 流程：
+  1. 蓝环境对外承接全部流量；
+  2. 在绿环境部署新版本，做完冒烟测试；
+  3. **切换流量入口（负载均衡 / 网关），把所有流量一次性切到绿环境**；
+  4. 如果出问题，立刻切回蓝环境。
+- 特点：
+  1. ✅ 切换快、回滚极快；
+  2. ✅ 流量是**全量切换**，没有部分用户同时看到新旧版本；
+  3. ❌ 需要双倍服务器资源；
+  4. ❌ 一次性切换，如果有隐藏 bug，所有用户同时受影响。
+
+### 体现形式
+
+1. 步骤 1：环境准备与容器化
+   项目里写好`docker-compose.yml`:
+
+```yaml
+version: "3.8"
+services:
+  app-blue:
+    image: my-ai-app:v1.0
+    ports:
+      - "3001:8000"
+    environment:
+      - ENV=blue
+  app-green:
+    image: my-ai-app:v2.0
+    ports:
+      - "3002:8000"
+    environment:
+      - ENV=green
+```
+
+> 实际生产中，这两套环境可能分布在不同的服务器或 K8s 集群中，这里为了本地演示放在同一台机器
+
+2. 步骤 2：配置 Nginx 流量分发
+
+```js
+nginx.conf：
+http {
+    upstream backend {
+        # 默认指向蓝环境
+        server 127.0.0.1:3001; # 蓝
+        # server 127.0.0.1:3002; # 绿（暂未启用）
+    }
+
+    server {
+        listen 80;
+        location / {
+            proxy_pass http://backend;
+        }
+    }
+}
+```
+
+3. 步骤 3：绿环境部署与冒烟测试
+   启动绿环境：docker-compose up -d app-green
+
+隔离测试（蓝绿测试）：此时真实用户还在访问蓝环境（3001）。
+你直接在本地终端对绿环境（3002）运行冒烟测试：
+
+4. 步骤 4：流量切换
+
+冒烟测试通过后，修改 nginx.conf，注释掉蓝环境，启用绿环境：
+
+```
+upstream backend {
+        # server 127.0.0.1:3001; # 蓝（停用）
+        server 127.0.0.1:3002; # 绿（启用）
+    }
+```
+
+然后平滑重载 Nginx 配置 `nginx -s reload`
+
+> **注意，这些目前是手动，你可以通过cicd去编排脚本去自动化执行**
+
+# 灰度发布
+
+- 含义：**只切一小部分流量到新版本**，大部分流量仍然走老版本。观察指标（错误率、响应时间），没问题再逐步放大流量，直到 100%。
+- 流量筛选方式：
+  - 按比例：1%、5%、20% 流量切新版本；
+  - 按用户特征：指定用户 ID、地区、设备、租户、请求头；
+- 特点：
+  ✅ 风险最小，出事只有少量用户受影响；
+  ✅ 可以慢慢放量；
+  ❌ 新旧版本同时在线一段时间，要兼容数据（双版本兼容）；
+
+### 具体体现
+
+- 项目是单体应用，少量后端服务，没上 K8s → **OpenResty（Nginx+Lua）灰度足够**
+- 项目是大量微服务，跑在 K8s，需要服务之间调用也要灰度（全链路） → **Istio**
+
+解释一下：
+
+<p>
+
+Lua（读音：卢阿）：**轻量、小巧的脚本语言**，类似
+Python，但特别小、速度快，专门用来嵌入到别的软件里面当扩展脚本。
+
+</p>
+<p>
+
+OpenResty = Nginx + LuaJIT（Lua 高速解释器）+ 一堆扩展模块打包在一起的软件包。
+
+</p>
+
+```
+用户浏览器/App → 【OpenResty网关服务器】（这里执行Lua灰度脚本！）
+        ↓ Lua脚本判断
+        ├─白名单用户 / hash命中10% → 转发到 v2新版本后端服务
+        └─其他用户 → 转发到 v1老版本后端服务
+
+```
+
+## 完整全流程实操（从安装到灰度上线，一步一步）
+
+> 环境：Linux 服务器（CentOS / Ubuntu）
+
+### 步骤 1：服务器安装 OpenResty
+
+去官网下载安装包，在服务器执行安装命令。
+安装完成后，目录一般是 `/usr/local/openresty/`，里面自带 nginx 程序、LuaJIT。
+
+### 步骤 2：准备两个后端服务（v1、v2）
+
+- v1：127.0.0.1:8081（老版本）
+- v2：127.0.0.1:8082（新版本）
+
+> 你可以简单写两个 http 服务，访问返回不同内容，用来测试。
+
+### 步骤 3：修改 OpenResty 的配置文件 `nginx.conf`
+
+文件路径：`/usr/local/openresty/nginx/conf/nginx.conf`
+完整配置，直接复制到服务器：
+
+```
+http {
+    # 定义两组上游，v1老版本，v2新版本
+    upstream v1_server {
+        server 127.0.0.1:8081;
+    }
+    upstream v2_server {
+        server 127.0.0.1:8082;
+    }
+
+    server {
+        listen 80;
+        location / {
+            -- Lua脚本写在这里！每次请求进来都会执行这段Lua
+            access_by_lua_block {
+                -- 获取请求头里面的 user_id
+                local user_id = ngx.var.http_user_id or ""
+                local target_upstream = "v1_server" -- 默认走老版本
+
+                -- 白名单用户直接走v2
+                local white_list = {["10001"]=true,["10002"]=true}
+                if white_list[user_id] then
+                    target_upstream = "v2_server"
+                else
+                    -- user_id哈希取模，10%流量进v2
+                    if user_id ~= "" then
+                        local hash = ngx.crc32_long(user_id)
+                        if hash % 100 < 10 then
+                            target_upstream = "v2_server"
+                        end
+                    end
+                end
+                -- 设置变量，交给proxy_pass转发请求
+                ngx.var.target = target_upstream
+            }
+            proxy_pass http://$target;
+        }
+    }
+}
+```
+
+👉 这段 Lua 代码**保存在网关服务器的 nginx 配置文件**，不是你的业务项目代码。
+
+### 步骤 4：校验配置 + 重载 OpenResty（不中断线上服务）
+
+在服务器命令行执行：
+
+```
+# 检查配置语法有没有错误
+/usr/local/openresty/nginx/sbin/nginx -t
+
+# 配置没问题，reload重载，平滑生效，不切断现有连接
+/usr/local/openresty/nginx/sbin/nginx -s reload
+```
+
+> 修改 Lua 灰度规则（比如把 10% 改成 20%），改完配置，执行 reload 就生效。
+
+### 步骤 5：测试验证
+
+发请求，在请求头带上不同 user_id 测试：
+
+```
+# 白名单用户10001，一定路由到v2
+curl -H "user_id:10001" http://你的网关IP
+
+# user_id=10003，会做hash计算，90%概率v1，10%概率v2
+curl -H "user_id:10003" http://你的网关IP
+```
+
+### 步骤 6：上线发布完整流程（结合之前讲的冒烟）
+
+1. 部署新版本 v2 服务（8082）；
+2. **冒烟测试**：直接调用 v2 地址 `http://127.0.0.1:8082`，校验核心接口正常；冒烟失败直接放弃发布；
+3. 修改 OpenResty 配置，开启 10% 灰度流量，`nginx -s reload`；
+4. 观察监控：错误率、响应时间；
+5. 稳定无异常，把 Lua 里 `hash %100 < 10` 改成 `<50`（50% 流量），reload；
+6. 最后改成 `<100`，100% 流量切 v2；等一段时间稳定，下线 v1 服务。
+
+## 开发 & 运维分工：谁来写这个 Lua？
+
+- 小公司：后端程序员写 Lua 灰度脚本，交给运维放到网关服务器；
+- 中大型公司：**网关团队 / 运维开发**专门维护 OpenResty 网关和 Lua 脚本；业务开发不用碰网关。
+
+> 业务开发只负责写 v1、v2 的业务代码，不需要懂 Lua。
+
+## 优缺点 & 坑点（你面试也能说）
+
+✅优点：
+
+1. 不用改动业务代码，灰度逻辑全部在网关层；
+2. OpenResty 性能极高，Nginx 原生的并发能力，Lua 脚本几乎不损耗性能；
+3. 轻量，不需要 K8s、Istio 这种重型组件。
+
+❌缺点：
+
+1. 只能管**入口流量**；微服务内部 A 调用 B，这个网关管不到，无法做全链路灰度；
+2. 修改规则需要 reload Nginx；集群多台网关机器时，要批量分发配置；
+3. Lua 是小众语言，很多后端开发不熟悉。
+
+> 最后，发布上线这种知识点，最好是自己去实践一番，写写demo，能更好了掌握
