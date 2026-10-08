@@ -277,3 +277,73 @@ function numSquares(n) {
 
 那为什么要把数组初始化为 Infinity？
 因为我们假设一开始还没找到任何方案，先记一个“无穷大（无解）”。如果后续找到了某个方案，就可以把值更新得更小。初始化成 0 就全完蛋了，因为 0 比谁都小，Math.min 永远返回 0。
+
+## 零钱兑换
+
+### 一、目标拆解与数据类型映射
+
+先问自己三个问题（这是你转型 AI 全栈必须养成的肌肉记忆）：
+
+要返回什么？ 一个数字（最少硬币数），不是所有方案，不是方案列表。
+
+求什么？ 最小（不是最大、不是计数）。
+
+有“重复子问题”吗？ 有！amount=11 的答案，依赖 amount=10/9/6 的答案。
+
+于是题型判定：最优化 DP（完全背包变种），状态是“金额”，值是“最少硬币数”。
+
+### 二、直觉起步：先想想“最笨”的写法
+
+第一次见这题，正常人（包括我）第一反应是暴力递归：
+
+```js
+// 暴力 DFS：对每个金额，枚举所有硬币，取最小
+function dfs(coins, amount) {
+  if (amount === 0) return 0; // 刚好凑完
+  if (amount < 0) return Infinity; // 凑过头了，废
+  let min = Infinity;
+  for (const c of coins) {
+    min = Math.min(min, dfs(coins, amount - c) + 1);
+  }
+  return min;
+}
+```
+
+这个其实就是上一题的变体，这个时候你注意，dp[i]代表的是个数
+然后dp里面的i是金额，外层循环遍历金额，内层循环遍历数组里面的数
+`dp[i]=Math.min(dp[i-arr[j]]+1,dp[i])`
+
+```js
+/**
+ * @param {number[]} coins 硬币面额数组
+ * @param {number} amount 目标金额
+ * @return {number} 最少硬币数，凑不出返回 -1
+ */
+var coinChange = function (coins, amount) {
+  // 边界：0 元不需要任何硬币
+  if (amount === 0) return 0;
+
+  // dp[i] = 凑出金额 i 所需的最少硬币数
+  // 初始化为 Infinity，代表"暂时凑不出"
+  const dp = new Array(amount + 1).fill(Infinity);
+  dp[0] = 0; // 地基：凑 0 元要 0 枚
+
+  // 从金额 1 一路打到 amount
+  for (let i = 1; i <= amount; i++) {
+    // 遍历每一种硬币（注意从 0 开始！）
+    for (let j = 0; j < coins.length; j++) {
+      const c = coins[j];
+
+      // 关键守卫：只有 i >= c 时，才可能用这枚硬币
+      // 否则 dp[i - c] 是 undefined，会算出 NaN 污染整张表
+      if (i - c >= 0) {
+        // dp[i - c] + 1：用掉这一枚 c 之后的方案数 + 这一枚
+        dp[i] = Math.min(dp[i], dp[i - c] + 1);
+      }
+    }
+  }
+
+  // 如果还是 Infinity，说明这个金额根本凑不出来（比如 coins=[2], amount=3）
+  return dp[amount] === Infinity ? -1 : dp[amount];
+};
+```
