@@ -347,3 +347,86 @@ var coinChange = function (coins, amount) {
   return dp[amount] === Infinity ? -1 : dp[amount];
 };
 ```
+
+## 单词拆分
+
+### 第 1 步
+
+- 返回布尔
+- 要的结果是能不能拆，而不是怎么拆
+
+### 第 2 步
+
+> 我拿字典里的每个词，去 s 里面找一找，找到了就把它从 s 里抠掉，最后看看 s 是不是空了。
+
+```js
+s = "cars"
+wordDict = ["car", "ca", "rs"]
+拿 "car" 找 → 在开头找到 → 抠掉 → s 变成 "s"
+拿 "ca" 找 → 没了
+拿 "rs" 找 → 没了
+s = "s" 不为空 → 返回 false ❌
+```
+
+> 错了吧！ 因为你一旦先抠了 "car"，就把正确答案 "ca" + "rs" 的可能性给堵死了。这说明「贪心地找到就抠」这个策略根本不对——你需要在每个位置都试一遍所有可能的词，试错了要能退回来。
+
+### 回溯
+
+既然「找到就抠」不行，那最直觉的暴力解法就是——回溯：
+
+> 从字符串开头开始，尝试用字典里每一个词去匹配，能匹配上就往下走，走不通就退回来换下一个词。
+> 我用 s = "leetcode", wordDict = ["leet", "code"] 给你画一下决策树：
+
+```text
+dfs(0) 从下标 0 开始
+│
+├─ 试 "leet" → s[0..4] = "leet" ✅ 匹配！
+│   └─ dfs(4) 从下标 4 开始
+│       ├─ 试 "leet" → s[4..8] = "code" ❌ 不匹配
+│       └─ 试 "code" → s[4..8] = "code" ✅ 匹配！
+│           └─ dfs(8) → 下标 8 == s.length ✅ 到头了！返回 true 🎉
+│
+└─ 试 "code" → s[0..4] = "leet" ❌ 不匹配
+```
+
+```js
+var wordBreak = function (s, wordDict) {
+  const wordSet = new Set(wordDict); // 用 Set 查词 O(1)
+  function dfs(i) {
+    if (i === s.length) return true;
+    for (const word of wordSet) {
+      if (s.startsWith(word, i)) {
+        if (dfs(word.length + i)) return true;
+      }
+    }
+    return false;
+  }
+  return dfs(0);
+};
+```
+
+跑一下 `s = "leetcode"` 是能出 true 的，但你要是拿 `s = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaab"`, wordDict = ["a", "aa", "aaa"] 去测——咪的天呀，超时了！！！ 😭
+
+为啥？因为它会把所有「切 a 的方式」全试一遍，光是「拆一串 a」就有指数级的组合。这就是重复计算：dfs(5)、dfs(6) 会被反复算好几遍。我们加上缓存记录
+
+### 记录缓存
+
+```js
+var wordBreak = function (s, wordDict) {
+  const wordSet = new Set(wordDict); // 用 Set 查词 O(1)
+  const memo = new Map();
+  function dfs(i) {
+    if (i === s.length) return true;
+    if (memo.has(i)) return memo.get(i);
+    for (const word of wordSet) {
+      if (s.startsWith(word, i)) {
+        memo.set(i, true);
+        if (dfs(word.length + i)) return true;
+      }
+    }
+    return memo.set(false);
+    return false;
+  }
+  return dfs(0);
+};
+```
