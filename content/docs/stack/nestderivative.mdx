@@ -1,0 +1,133 @@
+---
+title: nest衍生技术栈
+---
+
+## nest-typed-config/class-validator/class-transformer
+
+假设你有一个 NestJS 项目，配置文件：
+
+```js
+PORT=3000
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_USER=admin
+
+最原始的使用方式：
+const port = process.env.PORT;
+const dbHost = process.env.DATABASE_HOST;
+```
+
+1. 没有类型保证：process.env.PORT 实际是字符串，而不是数字。
+2. 没有配置校验：如果忘记填写 DATABASE_HOST，可能直到连接数据库时才报错。
+3. 配置分散：每个模块都直接使用 process.env，难以统一管理和维护。
+   nest-typed-config 就是为了解决这些问题。
+   一般搭配lass-validator/class-transformer这两个库使用
+   > src/config/app.config.ts
+
+```js
+import { IsInt, IsString, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class AppConfig {
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  @Type(() => Number)
+  PORT: number = 3000;
+
+  @IsString()
+  DATABASE_HOST!: string;
+
+  @IsInt()
+  @Type(() => Number)
+  DATABASE_PORT!: number;
+}
+```
+
+> src/app.module.ts
+
+```js
+import { Module } from "@nestjs/common";
+import { TypedConfigModule, dotenvLoader } from "nest-typed-config";
+
+import { AppConfig } from "./config/app.config";
+
+@Module({
+  imports: [
+    TypedConfigModule.forRoot({
+      schema: AppConfig,
+      load: dotenvLoader(),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+> 业务中直接注入
+
+```js
+import { Injectable } from '@nestjs/common';
+import { AppConfig } from './config/app.config';
+
+@Injectable()
+export class DatabaseService {
+  constructor(
+    private readonly config: AppConfig,
+  ) {}
+
+  connect() {
+    console.log(this.config.DATABASE_HOST);
+    console.log(this.config.DATABASE_PORT);
+  }
+}
+```
+
+## nest的module模块
+
+### Module（模块）负责什么
+
+一句话：Module 是 NestJS 中组织代码的最小单元，也是 DI（依赖注入）容器的作用域边界。
+
+它负责三件事：
+
+1. 声明这个模块对外提供什么能力 （`controllers` +`exports` ）
+2. 声明这个模块内部依赖什么 （`imports` ）
+3. 声明这个模块内部用哪些实例来组装 （`providers` ）
+   可以把 Module 类比成"一个带明确进出口的车间"：
+
+- `imports` ：这个车间需要从别的车间拿什么零件
+- `providers` ：车间内部自己有哪些工人和机器
+- `controllers` ：车间对外的接待窗口（HTTP 路由入口）
+- `exports` ：哪些东西允许别的车间来借
+
+`AppModule` 是 根模块 ，NestJS 启动时从它开始遍历整个依赖图，把所有模块、provider 都注册进 DI 容器，然后才能正常注入。
+
+```js
+@Module({
+  imports: [], // 依赖的其它模块（含静态和动态模块）
+  controllers: [], // 该模块提供的 Controller（处理 HTTP 路由）
+  providers: [], // 该模块内可注入的服务/工厂
+  exports: [], // 暴露给外部模块用的 provider（本文件没用到）
+})
+export class AppModule {}
+```
+
+`providers` 数组里的每一项都是一个" 注入令牌 → 实例 "的绑定关系，注册到 NestJS 的 DI 容器里。
+
+核心作用：把"某个东西怎么来的"告诉容器，这样别处就可以直接`constructor(private xxx: Xxx)` 拿到，不用自己`new` 。
+
+以 app.module.ts:95-111 的`ChatOpenAI` 为例：
+
+```js
+{
+  provide: ChatOpenAI,              // 令牌：别人要 ChatOpenAI 时找这个
+  async useFactory(config: Config) { // 工厂：怎么造出实例
+    return new ChatOpenAI({ model: config.chatModel.model, ... })
+  },
+  inject: [Config],                 // 工厂的入参从哪来
+}
+```
+
+当某个 service 写：`constructor(private chatModel: ChatOpenAI) {}`
+
+NestJS 就会去容器里找`provide: ChatOpenAI` 的那条记录，执行`useFactory(config)` 拿到实例，注入进去。
