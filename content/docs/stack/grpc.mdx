@@ -1,0 +1,98 @@
+---
+title: grpc
+---
+
+gRPC 实现一个最小 RPC demo：客户端传入“小王”，服务端返回“你好，小王！”。使用 Node.js，按官方的动态加载方式读取 .proto。官方 Node.js 教程
+
+```text
+rpc-demo/
+├── hello.proto     # 接口约定：方法、参数、返回值
+├── server.js       # 服务端：实现方法，监听端口
+├── client.js       # 客户端：通过网络调用方法
+└── package.json    # npm 初始化生成
+```
+
+> npm install @grpc/grpc-js @grpc/proto-loader
+
+在 hello.proto 中约定双方如何交流：
+
+```js
+syntax = "proto3";
+package demo;
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloReply);
+}
+message HelloRequest {
+  string name = 1;
+}
+message HelloReply {
+  string message = 1;
+}
+```
+
+它表示：服务 Greeter 提供方法 SayHello，接收一个包含 name 的请求，返回一个包含 message 的结果。字段后面的 1 是字段编号。
+
+在 server.js 中实现真正的业务：
+
+```js
+const grpc = require("@grpc/grpc-js");
+const protoLoader = require("@grpc/proto-loader");
+const path = require("node:path");
+
+// 加载双方约定的接口
+const definition = protoLoader.loadSync(path.join(__dirname, "hello.proto"));
+const demo = grpc.loadPackageDefinition(definition).demo;
+
+const server = new grpc.Server();
+
+// 给接口绑定实际处理函数
+server.addService(demo.Greeter.service, {
+  sayHello(call, callback) {
+    const name = call.request.name;
+    console.log("服务端收到：", name);
+
+    // 第一个参数是错误；null 表示成功
+    callback(null, { message: `你好，${name}！` });
+  },
+});
+
+// 在本机监听客户端请求
+server.bindAsync(
+  "127.0.0.1:50051",
+  grpc.ServerCredentials.createInsecure(),
+  (error) => {
+    if (error) throw error;
+    console.log("服务端已启动：127.0.0.1:50051");
+  },
+);
+```
+
+在 client.js 中调用远程方法：
+
+```js
+const grpc = require("@grpc/grpc-js");
+const protoLoader = require("@grpc/proto-loader");
+const path = require("node:path");
+
+// 客户端也读取同一份接口约定
+const definition = protoLoader.loadSync(path.join(__dirname, "hello.proto"));
+const demo = grpc.loadPackageDefinition(definition).demo;
+
+// 创建指向服务端的客户端
+const client = new demo.Greeter(
+  "127.0.0.1:50051",
+  grpc.credentials.createInsecure(),
+);
+
+// 看起来像调用函数，实际会发送网络请求
+client.sayHello({ name: "小王" }, (error, response) => {
+  if (error) {
+    console.error("调用失败：", error.message);
+    process.exitCode = 1;
+  } else {
+    console.log(response.message);
+  }
+
+  client.close();
+});
+```
