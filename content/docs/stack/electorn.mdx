@@ -1,0 +1,145 @@
+---
+title: electorn
+---
+
+# Electron + React：面试与开发速查
+
+![](/electorn/image.png)
+![](/electorn/electorn.png)
+
+## Electron 常见问题
+
+**1. Electron 是什么，为什么包大、进程多？**
+
+Electron 把 Chromium、Node.js 和桌面集成能力带进应用，方便用 Web 技术开发跨平台桌面软件。代价是浏览器运行时、依赖和多进程都有资源开销。进程多不自动等于泄漏，包大也不能靠压缩业务 JavaScript 全部解决。[进程模型](https://www.electronjs.org/docs/latest/tutorial/process-model)
+
+**2. 主进程和渲染进程分别做什么？**
+
+主进程是应用入口，管理窗口、菜单、托盘、生命周期，并通过 Electron/Node API 完成需要系统能力的操作。渲染进程运行页面和 React，负责输入、展示和交互。普通网页网络请求不必全部绕主进程；按权限、数据归属和业务边界决定。
+
+除主进程和渲染进程外，还可能看到 GPU、utility 等进程。不要背成“一个 Electron 应用永远只有两个进程”。[进程模型](https://www.electronjs.org/docs/latest/tutorial/process-model)
+
+**3. preload 是第三个独立进程吗？**
+
+不是。它是页面加载前执行的脚本，在对应渲染进程中运行。开启 context isolation 时，它与页面 JavaScript 处在不同上下文，通过 contextBridge 向页面提供少量接口。沙箱 preload 的 Node 能力受限，不能默认随便 require 文件系统等模块。[上下文隔离](https://www.electronjs.org/docs/latest/tutorial/context-isolation)、[沙箱](https://www.electronjs.org/docs/latest/tutorial/sandbox)
+**4. React 怎么调用本地能力？**
+
+例如用户选择目录：React 调 window.desktop.pickDirectory()；preload 把它映射为一个固定 IPC 请求；主进程校验调用方，打开系统对话框，再把结果返回。
+
+请求响应常用 ipcRenderer.invoke / ipcMain.handle；主进程推送进度可用 webContents.send，在 preload 包装后通知页面。IPC 传可序列化数据，函数、DOM 对象不能随便传；高频或大数据传输需考虑分批、MessagePort 等机制。[IPC 官方指南](https://www.electronjs.org/docs/latest/tutorial/ipc)
+
+**5. 安全配置怎么讲？**
+
+明确设置 nodeIntegration: false、contextIsolation: true、sandbox: true。preload 按业务暴露 pickDirectory、startScan 等接口，不暴露整个 ipcRenderer 或任意文件读写入口。主进程还要验证调用来源、参数和权限；TypeScript 类型不能替代运行时校验。
+
+限制页面导航、弹窗和外链，配置适合生产构建的 CSP。上下文隔离、沙箱和业务授权分别解决不同问题，不能互相替代。[Electron 安全指南](https://www.electronjs.org/docs/latest/tutorial/security)
+
+**6. 生命周期有哪些坑？**
+
+通常在 app.whenReady() 后创建窗口。窗口关闭与整个应用退出是两件事，macOS 上最后一个窗口关闭后，应用通常仍可保留，activate 时按需重新打开。还应按产品需求实现退出前保存、单实例处理和后台任务关闭。[生命周期与窗口示例](https://www.electronjs.org/docs/latest/tutorial/ipc)
+
+**7. 多窗口状态怎么同步？**
+
+每个窗口有自己的 React 内存，不能假设多个窗口共享一个前端 store。把需要跨窗口一致的数据放在明确的服务或持久层，操作完成后通知相关窗口；窗口内部的输入框、展开状态等继续本地管理。关键是明确谁拥有数据、谁负责修改、如何通知和恢复。
+
+**8. 为什么加 async/await 仍然卡？**
+
+async 不会把 JavaScript 计算自动搬到其他线程。同步循环、JSON 大解析、压缩、索引等工作如果仍在主线程执行，就仍可能阻塞。I/O 用非阻塞接口；CPU 重活用 Worker 或独立进程，配合取消、进度和任务并发控制。[性能指南](https://www.electronjs.org/docs/latest/tutorial/performance)、[utilityProcess](https://www.electronjs.org/docs/latest/api/utility-process)
+
+**9. 文件很多时，为什么不能逐条发 IPC？**
+
+逐条消息会增加序列化、进程通信、事件处理和页面更新开销。可以先返回一页结果，再按批追加；进度只发送必要变化。分页限制传输与计算规模，虚拟列表限制实际 DOM 数量，两者解决的问题不同。[IPC](https://www.electronjs.org/docs/latest/tutorial/ipc)、[性能指南](https://www.electronjs.org/docs/latest/tutorial/performance)
+
+**10. 开发正常，打包后白屏，先查什么？**
+
+先看打包版的页面错误和资源加载失败，核对主进程入口、编译后的 preload 路径、资源相对路径、路由、运行时依赖以及 CSP。开发时连 Vite 服务，发布时加载构建产物，路径假设不同。采用 file 协议时尤其注意根路径资源；也可按项目设计使用自定义协议。[Forge Vite 资源路径说明](https://www.electronforge.io/config/plugins/vite)、[安全指南](https://www.electronjs.org/docs/latest/tutorial/security)
+
+**11. 原生模块为什么要重编译？**
+
+Electron 与系统 Node 的 ABI、目标架构等可能不同，某些原生模块需要面向 Electron 重建。升级 Electron、切换平台或架构后要核对兼容性和构建产物；不是所有 npm 依赖都要重编译。[原生模块指南](https://www.electronjs.org/docs/latest/tutorial/using-native-node-modules)
+
+**12. Package、Make、Publish 与自动更新是什么关系？**
+
+Forge 中 Package 组织可运行应用，Make 生成安装包等分发产物，Publish 上传这些产物。上传成功不代表自动更新已经配置好。更新还涉及版本元数据、下载、安装时机、数据兼容和失败恢复。Electron 内置 autoUpdater 支持 Windows、macOS，不内置 Linux 更新支持；其他更新工具需分别核对平台方案。[构建生命周期](https://www.electronforge.io/core-concepts/build-lifecycle)、[autoUpdater](https://www.electronjs.org/docs/latest/api/auto-updater)
+
+## React 常见问题
+
+**13. 组件重新执行，是不是 DOM 就全部重建？**
+
+不是。触发更新后，React 进行 render，计算下一版界面，再在 commit 阶段提交必要变化。组件函数执行了，不等于真实 DOM 全部变了；但 render 自身的昂贵计算仍会耗时。[Render 与 Commit](https://react.dev/learn/render-and-commit)
+
+**14. state 为什么改完立刻读还是旧值？**
+
+当前事件回调读到的是本次渲染对应的状态。setState 安排后续更新，不会原地改掉当前闭包里的变量。基于旧值累加时用 setCount(previous => previous + 1)，对象和数组按不可变方式更新。[useState](https://react.dev/reference/react/useState)
+
+**15. useEffect 应该放什么？**
+
+用于与外部系统同步：订阅 IPC 进度、定时器、连接等。能由 props/state 直接计算出的值通常直接计算，不必先放进另一个 state 再用 Effect 同步。
+
+依赖变化时先清理旧订阅再建立新订阅，卸载时也清理。清除自己创建的 listener、timer 和 watcher，避免通过 removeAllListeners 误删其他模块订阅。[useEffect](https://react.dev/reference/react/useEffect)
+
+**16. 为什么开发环境会额外执行？**
+
+StrictMode 有开发期检查，会额外调用渲染相关逻辑、重新执行 Effect 等，帮助发现不纯渲染和缺少清理的问题。不要把“开发时 Effect 多跑”直接判断成生产 bug，也不要通过关闭 StrictMode 掩盖订阅泄漏。[StrictMode](https://react.dev/reference/react/StrictMode)
+
+**17. key 为什么不能随便用数组下标？**
+
+key 帮 React 匹配相邻层级列表中的项目身份。插入、删除、重排时，用位置代替身份容易让输入状态等跟错项目；优先使用稳定业务 ID。不是所有静态列表使用下标都会出错。[列表与 key](https://react.dev/learn/rendering-lists)
+
+**18. memo、useMemo、useCallback 怎么区分？**
+
+| API         | 缓存/比较的对象 | 实际用途                                      |
+| ----------- | --------------- | --------------------------------------------- |
+| memo        | 组件 props      | 在 props 未变时，通常跳过父更新带来的重复渲染 |
+| useMemo     | 计算结果        | 避免依赖不变时重复做昂贵计算                  |
+| useCallback | 返回的函数引用  | 在确实需要稳定引用的地方减少无意义变化        |
+
+memo 不能阻止组件自己的 state 或所消费 context 的更新。缓存也有成本；不要给所有组件和回调机械加缓存。启用并正确配置 React Compiler 后，它能自动处理许多记忆化场景，但不能假设项目装了 React 就自动启用了编译器。[memo](https://react.dev/reference/react/memo)、[useMemo](https://react.dev/reference/react/useMemo)、[useCallback](https://react.dev/reference/react/useCallback)、[React Compiler](https://react.dev/learn/react-compiler/introduction)
+
+**19. 搜索输入卡顿怎么处理？**
+
+先区分请求太多、计算太重还是列表渲染太多。防抖可减少连续输入产生的请求；虚拟列表减少 DOM；useDeferredValue / Transition 可降低部分更新的紧迫程度，但不会自动减少网络请求，也不会把一次很长的同步计算变成另一个线程。CPU 计算需要时仍要搬到 Worker。[useDeferredValue](https://react.dev/reference/react/useDeferredValue)
+
+**20. 异步结果回来顺序不一致怎么办？**
+
+用户先搜 A 再搜 B，A 的旧结果可能后返回。用请求序号或任务 ID 忽略过期结果，能取消时取消。跨 IPC 的取消要自己设计 taskId/cancel 协议，不能假设浏览器的 AbortSignal 能原样跨过去。页面卸载、窗口关闭也要停止对应订阅和任务。[Effect 清理与竞态](https://react.dev/learn/synchronizing-with-effects)
+
+## 实际开发顺序
+
+以“选择目录、扫描文件、搜索和展示进度”的文件管理器为例。
+
+1. **定义需求与指标。** 明确支持的平台、目标目录规模、授权范围，以及首次可操作时间、扫描完成时间、搜索响应、CPU、内存和安装包大小。不要先给没有测量的优化编成绩。
+2. **建立工程。** 分出 main、preload、renderer、workers、shared/contracts。React 只放 renderer；主进程与 preload 各自构建，shared 优先放协议和类型，避免 renderer 意外引入 Node 实现。
+3. **先定义 API。** pickDirectory、startScan、cancelScan、onScanProgress，约定输入、结果、错误码、任务 ID，以及订阅如何取消。主进程执行运行时验证。
+4. **做一条最小链。** 点击按钮 → 系统目录选择 → 扫描少量文件 → 返回结构化结果 → React 展示。把取消选择、读取失败也做通。
+5. **补上任务能力。** 重计算交给合适的 Worker/进程，限制并发，分批返回结果，支持进度、取消和窗口关闭时释放。
+6. **补 React 页面。** 文件表格、搜索、空态、错误态、加载态；按数据量选择分页、虚拟列表和缩略图策略。
+7. **开发与发布分开验证。** renderer 可以 HMR；main/preload 改动按工具链机制重启或重载。务必测试真正安装后的应用，核对资源路径、权限和原生模块。
+8. **完成发布链。** 类型检查、单元测试、组件测试、IPC 集成测试、安装包验收，再做签名/公证、上传、升级测试与日志定位。
+
+Electron Forge 提供完整构建分发链，也有 TypeScript 模板及 React 接入说明。工具链按锁定版本选型；当前 Forge 文档仍把其 Vite 插件标注为实验性，不能把它与所有 Vite 方案混为一谈。[Forge](https://www.electronforge.io/)、[React 接入](https://www.electronforge.io/guides/framework-integration/react-with-typescript)、[Vite 插件](https://www.electronforge.io/config/plugins/vite)
+
+## 优化怎么落到代码和测量
+
+| 用户看到的现象     | 先定位                                   | 对应改法                                               | 验证什么                                    |
+| ------------------ | ---------------------------------------- | ------------------------------------------------------ | ------------------------------------------- |
+| 启动慢             | 启动各阶段、首屏依赖和网络等待           | 延迟加载非首屏功能，启动任务后移，减少同步初始化       | 冷启动、热启动到可操作状态的 P50/P95        |
+| 扫描时整个应用迟钝 | 主进程 CPU profile、同步 I/O             | 非阻塞 I/O、Worker/utility process、任务队列           | 窗口交互、主进程繁忙时间、任务耗时          |
+| 搜索输入卡         | React Profiler 与 Chrome Performance     | 区分防抖、状态拆分、延后非紧急更新、Worker 计算        | 输入响应、长任务、组件渲染耗时              |
+| 文件表格滚动卡     | DOM 数、布局与绘制、每次渲染范围         | 虚拟列表、按需图片、减少无关组件更新                   | 帧耗时、长帧、DOM 数、内存                  |
+| 进度消息刷屏       | IPC 条数、载荷大小和 React 更新次数      | 合并消息、分批结果、进度节流，按业务需要保留精度       | 每任务消息数、总字节数、CPU、可感知进度延迟 |
+| 用久后越来越占内存 | 渲染堆快照、监听器、后台任务及各进程内存 | 对称取消订阅，关闭 watcher/timer，限制缓存和缩略图数量 | 重复同一操作后内存趋势与残留对象            |
+| 包大               | 安装包与解包后各目录占用                 | 清理开发依赖和无用资源、合理打包与依赖裁剪             | 下载体积、安装体积、启动兼容性              |
+| 打包后才失败       | 安装版日志、资源/依赖加载情况            | 修正路径、补运行时资源、重建原生模块                   | 目标系统上的安装、启动、核心功能和升级      |
+
+先测量再改动，是 Electron 官方性能文档强调的实践。React 局部渲染用 React DevTools Profiler 或 Profiler API，浏览器执行/布局用 Chrome Performance，系统层面还要关注主进程及其他进程；不能只看 React render 次数或 renderer JS heap。[Electron 性能指南](https://www.electronjs.org/docs/latest/tutorial/performance)、[React Profiler](https://react.dev/reference/react/Profiler)
+
+## 如何验证优化有效
+
+- 固定机器、系统、Electron 版本、构建方式、数据集与缓存条件；冷启动与热启动分开统计。正式用户耗时用接近发布的构建验证，不把 HMR 和开发检查开销当生产表现。
+- 准备小、中、大目录，例如 100、10,000、100,000 个文件；增加无权限、已删除文件、空目录、超长名称、取消扫描等用例。数量是测试设计示例，按真实业务调整。
+- UI 可以 mock preload API 测加载、失败、空态；纯函数测过滤和排序；集成测试用真实窗口验证 IPC、权限、返回值和订阅释放；发布测试用实际安装包。
+- 给一次任务一个 ID，记录排队、扫描、传输、展示等阶段。跨进程不要直接相减不同 time origin 的 performance.now()；分别记录阶段时长，或采用统一跟踪机制。
+- 用户等待时间从用户触发操作量到目标结果可用。ready-to-show 不等于业务已可操作；只有首批文件出现与全部扫描完成也是不同指标。
+- P95 是样本耗时排序后的约 95% 分位数，说明大部分用户的等待上界情况。固定统计算法与样本场景，同时报告错误率、超时率，避免只统计顺利请求。
+- 修改前后重复同一任务；如果速度提升但漏文件、取消失效或授权变宽，不能算优化成功。
