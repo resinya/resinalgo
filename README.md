@@ -156,9 +156,9 @@ copy .env.example .env.local # Windows CMD
 
 4. **（可选）新增分类**：在 `src/lib/navigation.ts` 的 `categories` 数组里配置 `slug`、`title`、`description`，建立对应文档目录和 `index.mdx`，再把目录名加入 `content/docs/meta.json` 的侧边栏排序。首页导航自动生成该栏目的下拉菜单，桌面与移动端共用同一份数据。
 
-下拉文章直接读取 Fumadocs 页面树，标题与简介来自文章 frontmatter，顺序沿用各目录的 `meta.json`。新增文章只需维护文档目录，无需再手写导航链接。
+下拉文章直接读取 Fumadocs 页面树，标题来自文章 frontmatter，顺序沿用各目录的 `meta.json`。新增文章只需维护文档目录，无需再手写导航链接。
 
-下拉列表只展示文章标题；`src/lib/navigation.ts` 的 `navigationDropdown` 统一控制面板宽高（默认 240 × 224 px）。超出后在面板内滚动，列表支持悬停高亮与键盘聚焦。
+桌面导航沿用多列卡片样式，展示文章标题与简介；`src/lib/navigation.ts` 的 `navigationDropdown.height` 固定面板高度（默认 224 px），超出后在面板内滚动。移动端栏目默认收起，点击展开或收起，同时只展开一个栏目；`mobileMaxHeight` 控制移动栏目容器的最大高度（默认 480 px，并限制在视口内）。两端均支持悬停高亮与键盘聚焦。
 
 ## 站点特性说明
 

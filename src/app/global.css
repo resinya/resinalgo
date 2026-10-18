@@ -99,8 +99,8 @@ html.dark .rn-hero-shade {
   color: rgba(255, 255, 255, 0.72);
 }
 
-.rn-nav-over-hero #nd-nav nav,
-.rn-nav-over-hero #nd-nav nav [class*="border"] {
+.rn-nav-over-hero #nd-nav:not([data-open]) nav,
+.rn-nav-over-hero #nd-nav:not([data-open]) nav [class*="border"] {
   border-color: rgba(255, 255, 255, 0.32);
 }
 
@@ -109,7 +109,7 @@ html.dark .rn-hero-shade {
   background-color: rgba(255, 255, 255, 0.14);
 }
 
-.rn-nav-over-hero #nd-nav [class*="hover:bg-fd-"]:hover {
+.rn-nav-over-hero #nd-nav:not([data-open]) [class*="hover:bg-fd-"]:hover {
   background-color: rgba(255, 255, 255, 0.22);
 }
 
@@ -195,14 +195,22 @@ html.dark [data-theme-toggle] > svg:last-of-type {
   );
 }
 
-/* 桌面面板跟随栏目按钮定位；标题超出固定高度时只滚动面板。 */
+/* 保留 Fumadocs 卡片布局，固定面板高度，内容只在面板内滚动。 */
 .rn-nav-dropdown {
-  max-width: calc(100vw - 2rem);
+  max-height: var(--available-height);
+  align-content: start;
+  grid-auto-rows: max-content;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--color-fd-muted-foreground) transparent;
   text-shadow: none;
+}
+
+.rn-mobile-navigation {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 /* 展开移动菜单时使用主题底色与文字，保持浅色主题的可读性。 */
@@ -227,6 +235,7 @@ html.dark [data-theme-toggle] > svg:last-of-type {
 @media (prefers-reduced-motion: reduce) {
   .rn-nav-trigger,
   .rn-nav-trigger svg,
+  .rn-nav-card,
   .rn-nav-link {
     transition: none;
   }

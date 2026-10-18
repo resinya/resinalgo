@@ -34,10 +34,10 @@ export const categories = [
 
 type CategorySlug = (typeof categories)[number]["slug"];
 
-/** 下拉面板固定尺寸；超出高度的标题在面板内滚动。 */
+/** 桌面卡片面板固定高度；移动端限制展开内容的最大高度。 */
 export const navigationDropdown = {
-  width: 240,
   height: 224,
+  mobileMaxHeight: 480,
 };
 
 export interface NavigationSection {
@@ -45,6 +45,7 @@ export interface NavigationSection {
   title: string;
   items: {
     title: ReactNode;
+    description?: ReactNode;
     url: string;
     external?: boolean;
   }[];
@@ -64,22 +65,25 @@ export function getNavigationSections(tree: Root): NavigationSection[] {
         (node.index?.url === url || node.$ref?.folder === category.slug),
     );
     const pages = folder?.type === "folder" ? flattenTree(folder.children) : [];
+    const index =
+      folder?.type === "folder"
+        ? (folder.index ?? pages.find((page) => page.url === url))
+        : undefined;
 
     return {
       slug: category.slug,
       title: category.title,
       items: [
         {
-          title:
-            folder?.type === "folder" && folder.index?.name
-              ? folder.index.name
-              : `${category.title}概览`,
+          title: index?.name ?? `${category.title}概览`,
+          description: category.description,
           url,
         },
         ...pages
           .filter((page) => page.url !== url)
           .map((page) => ({
             title: page.name,
+            description: page.description,
             url: page.url,
             external: page.external,
           })),

@@ -1,35 +1,41 @@
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+import { MobileNavigation } from "@/components/home/mobile-navigation";
 import { NavigationDropdown } from "@/components/home/navigation-dropdown";
 import { getNavigationSections, navigationDropdown } from "./navigation";
 import { appName, gitConfig } from "./shared";
 import { source } from "./source";
 
 /**
- * 桌面使用独立定位的标题列表，移动端沿用 Fumadocs 的分组菜单。
+ * 桌面使用固定高度的卡片菜单，移动端按栏目折叠。
  * 两处都读取同一份栏目和文章配置。
  */
 function navigationLinks(): BaseLayoutProps["links"] {
-  return getNavigationSections(source.getPageTree()).flatMap(
-    (section): NonNullable<BaseLayoutProps["links"]> => [
-      {
+  const sections = getNavigationSections(source.getPageTree());
+
+  return [
+    ...sections.map(
+      (section): NonNullable<BaseLayoutProps["links"]>[number] => ({
         type: "custom",
         on: "nav",
         children: (
-          <NavigationDropdown section={section} {...navigationDropdown} />
+          <NavigationDropdown
+            section={section}
+            height={navigationDropdown.height}
+          />
         ),
-      },
-      {
-        type: "menu",
-        on: "menu",
-        text: section.title,
-        items: section.items.map((item) => ({
-          text: item.title,
-          url: item.url,
-          external: item.external,
-        })),
-      },
-    ],
-  );
+      }),
+    ),
+    {
+      type: "custom",
+      on: "menu",
+      children: (
+        <MobileNavigation
+          sections={sections}
+          maxHeight={navigationDropdown.mobileMaxHeight}
+        />
+      ),
+    },
+  ];
 }
 
 export function baseOptions(
