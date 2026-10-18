@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Avatar } from "@/components/home/avatar";
 import { HeroBoundary } from "@/components/home/hero-boundary";
 import { HeroStatusBar } from "@/components/home/hero-status-bar";
+import { getCategoryUrl } from "@/lib/navigation";
 import {
   author,
   avatarUrl,
@@ -90,7 +91,7 @@ export default function HomePage() {
               进入笔记
             </Link>
             <Link
-              href={`${docsRoute}/feelings`}
+              href={getCategoryUrl("feelings")}
               className="rounded-full border border-white/70 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-white/15"
             >
               先读感触

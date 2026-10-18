@@ -179,30 +179,6 @@ function resolveLaunchAt(value: string | undefined): string {
   return trimmed;
 }
 
-export const categories = [
-  {
-    slug: "feelings",
-    title: "感触",
-    description: "日常记录与心里话，不谈技术，只写当下的想法。",
-  },
-  {
-    slug: "engineering",
-    title: "工程化",
-    description:
-      "实际开发中的工程实践：架构决策、构建部署、质量保障与协作方式。",
-  },
-  {
-    slug: "stack",
-    title: "技术栈",
-    description: "前后端技术文章：语言、框架、运行时与底层原理。",
-  },
-  {
-    slug: "algo",
-    title: "算法",
-    description: "leetcode刷题思路",
-  },
-];
-
 export const docsRoute = "/docs";
 export const docsImageRoute = "/og/docs";
 export const docsContentRoute = "/llms.mdx/docs";

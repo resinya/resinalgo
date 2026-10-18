@@ -1,0 +1,177 @@
+[  239170ms] [ERROR] ./src/lib/layout.shared.tsx:3:1
+Error: Export getNavigationLinks doesn't exist in target module
+  1 | import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+  2 | import { ChevronDown } from "lucide-react";
+> 3 | import { getNavigationLinks } from "./navigation";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 | import { appName, gitConfig } from "./shared";
+  5 | import { source } from "./source";
+  6 |
+
+The export getNavigationLinks was not found in module [project]/src/lib/navigation.ts [app-rsc] (ecmascript).
+Did you mean to import getNavigationSections?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import trace:
+  Server Component:
+    ./src/lib/layout.shared.tsx
+    ./src/app/(home)/layout.tsx @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:1052
+[  239259ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  239322ms] [ERROR] ./src/lib/layout.shared.tsx:3:1
+Error: Export getNavigationLinks doesn't exist in target module
+  1 | import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+  2 | import { ChevronDown } from "lucide-react";
+> 3 | import { getNavigationLinks } from "./navigation";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 | import { appName, gitConfig } from "./shared";
+  5 | import { source } from "./source";
+  6 |
+
+The export getNavigationLinks was not found in module [project]/src/lib/navigation.ts [app-rsc] (ecmascript).
+Did you mean to import getNavigationSections?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import trace:
+  Server Component:
+    ./src/lib/layout.shared.tsx
+    ./src/app/(home)/layout.tsx @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:1052
+[  239384ms] [ERROR] ./src/lib/layout.shared.tsx:3:1
+Error: Export getNavigationLinks doesn't exist in target module
+  1 | import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+  2 | import { ChevronDown } from "lucide-react";
+> 3 | import { getNavigationLinks } from "./navigation";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 | import { appName, gitConfig } from "./shared";
+  5 | import { source } from "./source";
+  6 |
+
+The export getNavigationLinks was not found in module [project]/src/lib/navigation.ts [app-rsc] (ecmascript).
+Did you mean to import getNavigationSections?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import trace:
+  Server Component:
+    ./src/lib/layout.shared.tsx
+    ./src/app/(home)/layout.tsx @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:1052
+[  239385ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  239434ms] [ERROR] ./src/lib/layout.shared.tsx:3:1
+Error: Export getNavigationLinks doesn't exist in target module
+  1 | import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+  2 | import { ChevronDown } from "lucide-react";
+> 3 | import { getNavigationLinks } from "./navigation";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 | import { appName, gitConfig } from "./shared";
+  5 | import { source } from "./source";
+  6 |
+
+The export getNavigationLinks was not found in module [project]/src/lib/navigation.ts [app-rsc] (ecmascript).
+Did you mean to import getNavigationSections?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import trace:
+  Server Component:
+    ./src/lib/layout.shared.tsx
+    ./src/app/(home)/layout.tsx @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:1052
+[  239592ms] [ERROR] ./src/lib/layout.shared.tsx:3:1
+Error: Export getNavigationLinks doesn't exist in target module
+  1 | import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+  2 | import { ChevronDown } from "lucide-react";
+> 3 | import { getNavigationLinks } from "./navigation";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 | import { appName, gitConfig } from "./shared";
+  5 | import { source } from "./source";
+  6 |
+
+The export getNavigationLinks was not found in module [project]/src/lib/navigation.ts [app-rsc] (ecmascript).
+Did you mean to import getNavigationSections?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import trace:
+  Server Component:
+    ./src/lib/layout.shared.tsx
+    ./src/app/(home)/layout.tsx @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:1052
+[  239666ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  239668ms] [ERROR] ./src/lib/layout.shared.tsx:3:1
+Error: Export getNavigationLinks doesn't exist in target module
+  1 | import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+  2 | import { ChevronDown } from "lucide-react";
+> 3 | import { getNavigationLinks } from "./navigation";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 | import { appName, gitConfig } from "./shared";
+  5 | import { source } from "./source";
+  6 |
+
+The export getNavigationLinks was not found in module [project]/src/lib/navigation.ts [app-rsc] (ecmascript).
+Did you mean to import getNavigationSections?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import trace:
+  Server Component:
+    ./src/lib/layout.shared.tsx
+    ./src/app/(home)/layout.tsx @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:1052
+[  239732ms] [ERROR] ./src/lib/layout.shared.tsx:3:1
+Error: Export getNavigationLinks doesn't exist in target module
+  1 | import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+  2 | import { ChevronDown } from "lucide-react";
+> 3 | import { getNavigationLinks } from "./navigation";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 | import { appName, gitConfig } from "./shared";
+  5 | import { source } from "./source";
+  6 |
+
+The export getNavigationLinks was not found in module [project]/src/lib/navigation.ts [app-rsc] (ecmascript).
+Did you mean to import getNavigationSections?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import trace:
+  Server Component:
+    ./src/lib/layout.shared.tsx
+    ./src/app/(home)/layout.tsx @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:1052
+[  239793ms] [ERROR] ./src/lib/layout.shared.tsx:3:1
+Error: Export getNavigationLinks doesn't exist in target module
+  1 | import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+  2 | import { ChevronDown } from "lucide-react";
+> 3 | import { getNavigationLinks } from "./navigation";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 | import { appName, gitConfig } from "./shared";
+  5 | import { source } from "./source";
+  6 |
+
+The export getNavigationLinks was not found in module [project]/src/lib/navigation.ts [app-rsc] (ecmascript).
+Did you mean to import getNavigationSections?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import trace:
+  Server Component:
+    ./src/lib/layout.shared.tsx
+    ./src/app/(home)/layout.tsx @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:1052
+[  239844ms] [ERROR] ./src/lib/layout.shared.tsx:3:1
+Error: Export getNavigationLinks doesn't exist in target module
+  1 | import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+  2 | import { ChevronDown } from "lucide-react";
+> 3 | import { getNavigationLinks } from "./navigation";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  4 | import { appName, gitConfig } from "./shared";
+  5 | import { source } from "./source";
+  6 |
+
+The export getNavigationLinks was not found in module [project]/src/lib/navigation.ts [app-rsc] (ecmascript).
+Did you mean to import getNavigationSections?
+All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+
+Import trace:
+  Server Component:
+    ./src/lib/layout.shared.tsx
+    ./src/app/(home)/layout.tsx @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:1052
+[  240056ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  241068ms] [LOG] [Fast Refresh] done in 1098ms @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  241141ms] [LOG] [Fast Refresh] done in 1098ms @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  241212ms] [LOG] [Fast Refresh] done in 1098ms @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  241299ms] [LOG] [Fast Refresh] done in 1098ms @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  241354ms] [LOG] [Fast Refresh] done in 1098ms @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  241412ms] [LOG] [Fast Refresh] done in 1098ms @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  241474ms] [LOG] [Fast Refresh] done in 1098ms @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  256430ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  256524ms] [LOG] [Fast Refresh] done in 204ms @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  302602ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776
+[  302654ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/0l91_next_dist_1pf_7xs._.js:776

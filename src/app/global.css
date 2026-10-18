@@ -91,11 +91,11 @@ html.dark .rn-hero-shade {
     0 2px 10px rgba(0, 0, 0, 0.55);
 }
 
-.rn-nav-over-hero #nd-nav [class*="text-fd-"] {
+.rn-nav-over-hero #nd-nav:not([data-open]) [class*="text-fd-"] {
   color: #fff;
 }
 
-.rn-nav-over-hero #nd-nav [class*="hover:text-fd-"]:hover {
+.rn-nav-over-hero #nd-nav:not([data-open]) [class*="hover:text-fd-"]:hover {
   color: rgba(255, 255, 255, 0.72);
 }
 
@@ -156,14 +156,20 @@ html.dark [data-theme-toggle] > svg:last-of-type {
  * 少了 #nd-nav 的话，白色会把选中项的图标颜色也刷掉，
  * 结果是「白圆 + 白图标」，圆里什么都看不见。
  */
-.rn-nav-over-hero #nd-nav [data-theme-toggle] > svg {
+.rn-nav-over-hero #nd-nav:not([data-open]) [data-theme-toggle] > svg {
   color: #fff;
   background-color: transparent;
   opacity: 0.5;
 }
 
-.rn-nav-over-hero:not(.dark) #nd-nav [data-theme-toggle] > svg:first-of-type,
-.rn-nav-over-hero.dark #nd-nav [data-theme-toggle] > svg:last-of-type {
+.rn-nav-over-hero:not(.dark)
+  #nd-nav:not([data-open])
+  [data-theme-toggle]
+  > svg:first-of-type,
+.rn-nav-over-hero.dark
+  #nd-nav:not([data-open])
+  [data-theme-toggle]
+  > svg:last-of-type {
   color: #10151c;
   background-color: #fff;
   opacity: 1;
@@ -187,6 +193,43 @@ html.dark [data-theme-toggle] > svg:last-of-type {
     rgba(0, 0, 0, 0.34) 62%,
     rgba(0, 0, 0, 0) 100%
   );
+}
+
+/* 桌面面板跟随栏目按钮定位；标题超出固定高度时只滚动面板。 */
+.rn-nav-dropdown {
+  max-width: calc(100vw - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-fd-muted-foreground) transparent;
+  text-shadow: none;
+}
+
+/* 展开移动菜单时使用主题底色与文字，保持浅色主题的可读性。 */
+.rn-nav-over-hero #nd-nav[data-open] > nav {
+  background: var(--color-fd-background);
+  color: var(--color-fd-foreground);
+  backdrop-filter: blur(16px);
+}
+
+.rn-nav-over-hero #nd-nav[data-open] {
+  text-shadow: none;
+}
+
+@media (width < 640px) {
+  #nd-home-layout #nd-nav > nav > [data-open] {
+    max-height: calc(100dvh - 3.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rn-nav-trigger,
+  .rn-nav-trigger svg,
+  .rn-nav-link {
+    transition: none;
+  }
 }
 
 /*

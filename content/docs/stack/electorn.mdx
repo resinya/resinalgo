@@ -2,144 +2,618 @@
 title: electorn
 ---
 
-# Electron + React：面试与开发速查
+![Electron 示意图](/electorn/image.png)
 
-![](/electorn/image.png)
-![](/electorn/electorn.png)
+![Electron 架构图](/electorn/electorn.png)
 
-## Electron 常见问题
+## 一、Electron 基础原理（1–20 题）
 
-**1. Electron 是什么，为什么包大、进程多？**
+### 1. 什么是 Electron？核心原理是什么？
 
-Electron 把 Chromium、Node.js 和桌面集成能力带进应用，方便用 Web 技术开发跨平台桌面软件。代价是浏览器运行时、依赖和多进程都有资源开销。进程多不自动等于泄漏，包大也不能靠压缩业务 JavaScript 全部解决。[进程模型](https://www.electronjs.org/docs/latest/tutorial/process-model)
+**答案：** Electron 是基于 Chromium + Node.js 的跨平台桌面应用开发框架，允许使用 HTML/CSS/JS 构建 Windows/macOS/Linux 桌面应用。
 
-**2. 主进程和渲染进程分别做什么？**
+核心原理：将 Web 页面渲染能力（Chromium）和系统底层能力（Node.js）结合，通过主进程 + 渲染进程架构实现桌面应用。
 
-主进程是应用入口，管理窗口、菜单、托盘、生命周期，并通过 Electron/Node API 完成需要系统能力的操作。渲染进程运行页面和 React，负责输入、展示和交互。普通网页网络请求不必全部绕主进程；按权限、数据归属和业务边界决定。
+### 2. Electron 的两大进程是什么？有什么区别？
 
-除主进程和渲染进程外，还可能看到 GPU、utility 等进程。不要背成“一个 Electron 应用永远只有两个进程”。[进程模型](https://www.electronjs.org/docs/latest/tutorial/process-model)
+**答案：**
 
-**3. preload 是第三个独立进程吗？**
+- 主进程：唯一，启动应用、创建窗口、管理系统 API、生命周期。
+- 渲染进程：多个，负责渲染 Web 页面，每个窗口一个渲染进程。
 
-不是。它是页面加载前执行的脚本，在对应渲染进程中运行。开启 context isolation 时，它与页面 JavaScript 处在不同上下文，通过 contextBridge 向页面提供少量接口。沙箱 preload 的 Node 能力受限，不能默认随便 require 文件系统等模块。[上下文隔离](https://www.electronjs.org/docs/latest/tutorial/context-isolation)、[沙箱](https://www.electronjs.org/docs/latest/tutorial/sandbox)
-**4. React 怎么调用本地能力？**
+核心区别：主进程有权限调用所有 Electron API，渲染进程默认无系统权限，需通过 IPC 通信。
 
-例如用户选择目录：React 调 window.desktop.pickDirectory()；preload 把它映射为一个固定 IPC 请求；主进程校验调用方，打开系统对话框，再把结果返回。
+### 3. 主进程和渲染进程的通信方式有哪些？
 
-请求响应常用 ipcRenderer.invoke / ipcMain.handle；主进程推送进度可用 webContents.send，在 preload 包装后通知页面。IPC 传可序列化数据，函数、DOM 对象不能随便传；高频或大数据传输需考虑分批、MessagePort 等机制。[IPC 官方指南](https://www.electronjs.org/docs/latest/tutorial/ipc)
+**答案：** `ipcMain` / `ipcRenderer`、`contextBridge`、`remote`（已废弃）、`webContents`。
 
-**5. 安全配置怎么讲？**
+### 4. Electron 的生命周期事件有哪些？
 
-明确设置 nodeIntegration: false、contextIsolation: true、sandbox: true。preload 按业务暴露 pickDirectory、startScan 等接口，不暴露整个 ipcRenderer 或任意文件读写入口。主进程还要验证调用来源、参数和权限；TypeScript 类型不能替代运行时校验。
+**答案：**
 
-限制页面导航、弹窗和外链，配置适合生产构建的 CSP。上下文隔离、沙箱和业务授权分别解决不同问题，不能互相替代。[Electron 安全指南](https://www.electronjs.org/docs/latest/tutorial/security)
+- `ready`：应用启动。
+- `window-all-closed`：所有窗口关闭。
+- `before-quit`：退出前。
+- `will-quit`：即将退出。
+- `quit`：退出。
 
-**6. 生命周期有哪些坑？**
+### 5. 如何创建一个基础的 Electron 窗口？
 
-通常在 app.whenReady() 后创建窗口。窗口关闭与整个应用退出是两件事，macOS 上最后一个窗口关闭后，应用通常仍可保留，activate 时按需重新打开。还应按产品需求实现退出前保存、单实例处理和后台任务关闭。[生命周期与窗口示例](https://www.electronjs.org/docs/latest/tutorial/ipc)
+**答案：**
 
-**7. 多窗口状态怎么同步？**
+```js
+// 主进程 main.js
+const { app, BrowserWindow } = require("electron");
 
-每个窗口有自己的 React 内存，不能假设多个窗口共享一个前端 store。把需要跨窗口一致的数据放在明确的服务或持久层，操作完成后通知相关窗口；窗口内部的输入框、展开状态等继续本地管理。关键是明确谁拥有数据、谁负责修改、如何通知和恢复。
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      nodeIntegration: false, // 安全默认关闭
+      contextIsolation: true, // 开启上下文隔离
+    },
+  });
 
-**8. 为什么加 async/await 仍然卡？**
+  win.loadFile("index.html"); // 加载本地页面
+}
 
-async 不会把 JavaScript 计算自动搬到其他线程。同步循环、JSON 大解析、压缩、索引等工作如果仍在主线程执行，就仍可能阻塞。I/O 用非阻塞接口；CPU 重活用 Worker 或独立进程，配合取消、进度和任务并发控制。[性能指南](https://www.electronjs.org/docs/latest/tutorial/performance)、[utilityProcess](https://www.electronjs.org/docs/latest/api/utility-process)
+app.whenReady().then(createWindow);
+```
 
-**9. 文件很多时，为什么不能逐条发 IPC？**
+### 6. 什么是上下文隔离（Context Isolation）？为什么必须开启？
 
-逐条消息会增加序列化、进程通信、事件处理和页面更新开销。可以先返回一页结果，再按批追加；进度只发送必要变化。分页限制传输与计算规模，虚拟列表限制实际 DOM 数量，两者解决的问题不同。[IPC](https://www.electronjs.org/docs/latest/tutorial/ipc)、[性能指南](https://www.electronjs.org/docs/latest/tutorial/performance)
+**答案：** 隔离渲染进程和主进程的 JS 运行环境，防止渲染进程直接访问 Node.js API，避免 XSS 攻击窃取系统权限，是 Electron 安全核心配置。
 
-**10. 开发正常，打包后白屏，先查什么？**
+### 7. 什么是 Node 集成（nodeIntegration）？为什么默认关闭？
 
-先看打包版的页面错误和资源加载失败，核对主进程入口、编译后的 preload 路径、资源相对路径、路由、运行时依赖以及 CSP。开发时连 Vite 服务，发布时加载构建产物，路径假设不同。采用 file 协议时尤其注意根路径资源；也可按项目设计使用自定义协议。[Forge Vite 资源路径说明](https://www.electronforge.io/config/plugins/vite)、[安全指南](https://www.electronjs.org/docs/latest/tutorial/security)
+**答案：** 允许渲染进程直接使用 Node.js API，默认关闭是为了防止恶意网页调用系统 API，仅在绝对可信的本地页面可谨慎开启。
 
-**11. 原生模块为什么要重编译？**
+### 8. Electron 和 NW.js 的区别？
 
-Electron 与系统 Node 的 ABI、目标架构等可能不同，某些原生模块需要面向 Electron 重建。升级 Electron、切换平台或架构后要核对兼容性和构建产物；不是所有 npm 依赖都要重编译。[原生模块指南](https://www.electronjs.org/docs/latest/tutorial/using-native-node-modules)
+**答案：**
 
-**12. Package、Make、Publish 与自动更新是什么关系？**
+1. Electron 主进程控制窗口，NW.js 无明确主进程。
+2. Electron 默认安全配置更严格，NW.js 默认开启 Node 集成。
+3. Electron 生态更活跃，社区支持更好。
 
-Forge 中 Package 组织可运行应用，Make 生成安装包等分发产物，Publish 上传这些产物。上传成功不代表自动更新已经配置好。更新还涉及版本元数据、下载、安装时机、数据兼容和失败恢复。Electron 内置 autoUpdater 支持 Windows、macOS，不内置 Linux 更新支持；其他更新工具需分别核对平台方案。[构建生命周期](https://www.electronforge.io/core-concepts/build-lifecycle)、[autoUpdater](https://www.electronjs.org/docs/latest/api/auto-updater)
+### 9. Electron 支持的协议有哪些？
 
-## React 常见问题
+**答案：** `file://`（本地文件）、`http://` / `https://`（网络）、自定义协议（如 `myapp://`）。
 
-**13. 组件重新执行，是不是 DOM 就全部重建？**
+### 10. 如何在 Electron 中加载远程 URL？
 
-不是。触发更新后，React 进行 render，计算下一版界面，再在 commit 阶段提交必要变化。组件函数执行了，不等于真实 DOM 全部变了；但 render 自身的昂贵计算仍会耗时。[Render 与 Commit](https://react.dev/learn/render-and-commit)
+**答案：** `win.loadURL("https://www.baidu.com")`，注意配置安全策略。
 
-**14. state 为什么改完立刻读还是旧值？**
+### 11. Electron 应用的入口文件是什么？
 
-当前事件回调读到的是本次渲染对应的状态。setState 安排后续更新，不会原地改掉当前闭包里的变量。基于旧值累加时用 setCount(previous => previous + 1)，对象和数组按不可变方式更新。[useState](https://react.dev/reference/react/useState)
+**答案：** `package.json` 中的 `main` 字段指定的文件（默认 `main.js`）。
 
-**15. useEffect 应该放什么？**
+### 12. 什么是 WebPreferences？常用配置有哪些？
 
-用于与外部系统同步：订阅 IPC 进度、定时器、连接等。能由 props/state 直接计算出的值通常直接计算，不必先放进另一个 state 再用 Effect 同步。
+**答案：** 窗口网页配置项，常用：`contextIsolation`、`nodeIntegration`、`preload`、`webSecurity`。
 
-依赖变化时先清理旧订阅再建立新订阅，卸载时也清理。清除自己创建的 listener、timer 和 watcher，避免通过 removeAllListeners 误删其他模块订阅。[useEffect](https://react.dev/reference/react/useEffect)
+### 13. 如何禁用 Electron 窗口的菜单？
 
-**16. 为什么开发环境会额外执行？**
+**答案：** `win.setMenu(null)` 或 `new BrowserWindow({ autoHideMenuBar: true })`。
 
-StrictMode 有开发期检查，会额外调用渲染相关逻辑、重新执行 Effect 等，帮助发现不纯渲染和缺少清理的问题。不要把“开发时 Effect 多跑”直接判断成生产 bug，也不要通过关闭 StrictMode 掩盖订阅泄漏。[StrictMode](https://react.dev/reference/react/StrictMode)
+### 14. Electron 窗口的常用事件有哪些？
 
-**17. key 为什么不能随便用数组下标？**
+**答案：**
 
-key 帮 React 匹配相邻层级列表中的项目身份。插入、删除、重排时，用位置代替身份容易让输入状态等跟错项目；优先使用稳定业务 ID。不是所有静态列表使用下标都会出错。[列表与 key](https://react.dev/learn/rendering-lists)
+- `closed`：窗口关闭。
+- `ready-to-show`：窗口就绪。
+- `maximize`：最大化。
+- `minimize`：最小化。
 
-**18. memo、useMemo、useCallback 怎么区分？**
+### 15. 如何让 Electron 应用在后台运行？
 
-| API         | 缓存/比较的对象 | 实际用途                                      |
-| ----------- | --------------- | --------------------------------------------- |
-| memo        | 组件 props      | 在 props 未变时，通常跳过父更新带来的重复渲染 |
-| useMemo     | 计算结果        | 避免依赖不变时重复做昂贵计算                  |
-| useCallback | 返回的函数引用  | 在确实需要稳定引用的地方减少无意义变化        |
+**答案：** 监听 `window-all-closed` 事件，不调用 `app.quit()`。
 
-memo 不能阻止组件自己的 state 或所消费 context 的更新。缓存也有成本；不要给所有组件和回调机械加缓存。启用并正确配置 React Compiler 后，它能自动处理许多记忆化场景，但不能假设项目装了 React 就自动启用了编译器。[memo](https://react.dev/reference/react/memo)、[useMemo](https://react.dev/reference/react/useMemo)、[useCallback](https://react.dev/reference/react/useCallback)、[React Compiler](https://react.dev/learn/react-compiler/introduction)
+### 16. 什么是 Chromium？在 Electron 中作用？
 
-**19. 搜索输入卡顿怎么处理？**
+**答案：** 谷歌开源浏览器内核，负责 Electron 的页面渲染、JS 执行、Web API 支持。
 
-先区分请求太多、计算太重还是列表渲染太多。防抖可减少连续输入产生的请求；虚拟列表减少 DOM；useDeferredValue / Transition 可降低部分更新的紧迫程度，但不会自动减少网络请求，也不会把一次很长的同步计算变成另一个线程。CPU 计算需要时仍要搬到 Worker。[useDeferredValue](https://react.dev/reference/react/useDeferredValue)
+### 17. 什么是 Node.js？在 Electron 中作用？
 
-**20. 异步结果回来顺序不一致怎么办？**
+**答案：** JS 运行时，提供文件系统、网络、进程等系统级 API，让 Electron 拥有桌面应用能力。
 
-用户先搜 A 再搜 B，A 的旧结果可能后返回。用请求序号或任务 ID 忽略过期结果，能取消时取消。跨 IPC 的取消要自己设计 taskId/cancel 协议，不能假设浏览器的 AbortSignal 能原样跨过去。页面卸载、窗口关闭也要停止对应订阅和任务。[Effect 清理与竞态](https://react.dev/learn/synchronizing-with-effects)
+### 18. 如何获取 Electron 版本？
 
-## 实际开发顺序
+**答案：** `process.versions.electron`。
 
-以“选择目录、扫描文件、搜索和展示进度”的文件管理器为例。
+### 19. 如何获取当前操作系统信息？
 
-1. **定义需求与指标。** 明确支持的平台、目标目录规模、授权范围，以及首次可操作时间、扫描完成时间、搜索响应、CPU、内存和安装包大小。不要先给没有测量的优化编成绩。
-2. **建立工程。** 分出 main、preload、renderer、workers、shared/contracts。React 只放 renderer；主进程与 preload 各自构建，shared 优先放协议和类型，避免 renderer 意外引入 Node 实现。
-3. **先定义 API。** pickDirectory、startScan、cancelScan、onScanProgress，约定输入、结果、错误码、任务 ID，以及订阅如何取消。主进程执行运行时验证。
-4. **做一条最小链。** 点击按钮 → 系统目录选择 → 扫描少量文件 → 返回结构化结果 → React 展示。把取消选择、读取失败也做通。
-5. **补上任务能力。** 重计算交给合适的 Worker/进程，限制并发，分批返回结果，支持进度、取消和窗口关闭时释放。
-6. **补 React 页面。** 文件表格、搜索、空态、错误态、加载态；按数据量选择分页、虚拟列表和缩略图策略。
-7. **开发与发布分开验证。** renderer 可以 HMR；main/preload 改动按工具链机制重启或重载。务必测试真正安装后的应用，核对资源路径、权限和原生模块。
-8. **完成发布链。** 类型检查、单元测试、组件测试、IPC 集成测试、安装包验收，再做签名/公证、上传、升级测试与日志定位。
+**答案：** `require("os").platform()`，返回 `win32` / `darwin` / `linux`。
 
-Electron Forge 提供完整构建分发链，也有 TypeScript 模板及 React 接入说明。工具链按锁定版本选型；当前 Forge 文档仍把其 Vite 插件标注为实验性，不能把它与所有 Vite 方案混为一谈。[Forge](https://www.electronforge.io/)、[React 接入](https://www.electronforge.io/guides/framework-integration/react-with-typescript)、[Vite 插件](https://www.electronforge.io/config/plugins/vite)
+### 20. Electron 应用的核心组成部分？
 
-## 优化怎么落到代码和测量
+**答案：** 主进程、渲染进程、Chromium、Node.js、Electron API。
 
-| 用户看到的现象     | 先定位                                   | 对应改法                                               | 验证什么                                    |
-| ------------------ | ---------------------------------------- | ------------------------------------------------------ | ------------------------------------------- |
-| 启动慢             | 启动各阶段、首屏依赖和网络等待           | 延迟加载非首屏功能，启动任务后移，减少同步初始化       | 冷启动、热启动到可操作状态的 P50/P95        |
-| 扫描时整个应用迟钝 | 主进程 CPU profile、同步 I/O             | 非阻塞 I/O、Worker/utility process、任务队列           | 窗口交互、主进程繁忙时间、任务耗时          |
-| 搜索输入卡         | React Profiler 与 Chrome Performance     | 区分防抖、状态拆分、延后非紧急更新、Worker 计算        | 输入响应、长任务、组件渲染耗时              |
-| 文件表格滚动卡     | DOM 数、布局与绘制、每次渲染范围         | 虚拟列表、按需图片、减少无关组件更新                   | 帧耗时、长帧、DOM 数、内存                  |
-| 进度消息刷屏       | IPC 条数、载荷大小和 React 更新次数      | 合并消息、分批结果、进度节流，按业务需要保留精度       | 每任务消息数、总字节数、CPU、可感知进度延迟 |
-| 用久后越来越占内存 | 渲染堆快照、监听器、后台任务及各进程内存 | 对称取消订阅，关闭 watcher/timer，限制缓存和缩略图数量 | 重复同一操作后内存趋势与残留对象            |
-| 包大               | 安装包与解包后各目录占用                 | 清理开发依赖和无用资源、合理打包与依赖裁剪             | 下载体积、安装体积、启动兼容性              |
-| 打包后才失败       | 安装版日志、资源/依赖加载情况            | 修正路径、补运行时资源、重建原生模块                   | 目标系统上的安装、启动、核心功能和升级      |
+## 二、进程通信（21–40 题）
 
-先测量再改动，是 Electron 官方性能文档强调的实践。React 局部渲染用 React DevTools Profiler 或 Profiler API，浏览器执行/布局用 Chrome Performance，系统层面还要关注主进程及其他进程；不能只看 React render 次数或 renderer JS heap。[Electron 性能指南](https://www.electronjs.org/docs/latest/tutorial/performance)、[React Profiler](https://react.dev/reference/react/Profiler)
+### 21. ipcMain 和 ipcRenderer 的作用？
 
-## 如何验证优化有效
+**答案：**
 
-- 固定机器、系统、Electron 版本、构建方式、数据集与缓存条件；冷启动与热启动分开统计。正式用户耗时用接近发布的构建验证，不把 HMR 和开发检查开销当生产表现。
-- 准备小、中、大目录，例如 100、10,000、100,000 个文件；增加无权限、已删除文件、空目录、超长名称、取消扫描等用例。数量是测试设计示例，按真实业务调整。
-- UI 可以 mock preload API 测加载、失败、空态；纯函数测过滤和排序；集成测试用真实窗口验证 IPC、权限、返回值和订阅释放；发布测试用实际安装包。
-- 给一次任务一个 ID，记录排队、扫描、传输、展示等阶段。跨进程不要直接相减不同 time origin 的 performance.now()；分别记录阶段时长，或采用统一跟踪机制。
-- 用户等待时间从用户触发操作量到目标结果可用。ready-to-show 不等于业务已可操作；只有首批文件出现与全部扫描完成也是不同指标。
-- P95 是样本耗时排序后的约 95% 分位数，说明大部分用户的等待上界情况。固定统计算法与样本场景，同时报告错误率、超时率，避免只统计顺利请求。
-- 修改前后重复同一任务；如果速度提升但漏文件、取消失效或授权变宽，不能算优化成功。
+- `ipcMain`：主进程监听渲染进程消息，发送回复。
+- `ipcRenderer`：渲染进程向主进程发送消息，监听回复。
+
+### 22. 同步 IPC 通信怎么实现？
+
+**答案：**
+
+```js
+// 主进程
+ipcMain.on("sync-message", (event, arg) => {
+  event.returnValue = "主进程同步回复";
+});
+
+// 渲染进程（preload）
+const result = ipcRenderer.sendSync("sync-message", "同步消息");
+```
+
+### 23. 异步 IPC 通信怎么实现？
+
+**答案：**
+
+```js
+// 主进程
+ipcMain.handle("async-message", async (event, arg) => {
+  return "主进程异步回复";
+});
+
+// 渲染进程（preload）
+const result = await ipcRenderer.invoke("async-message", "异步消息");
+```
+
+### 24. 什么是 Preload 脚本？作用是什么？
+
+**答案：** 预加载脚本，运行在渲染进程之前，是主进程和渲染进程通信的唯一安全桥梁，通过 `contextBridge` 暴露 API 给渲染进程。
+
+### 25. 如何编写安全的 Preload 脚本？
+
+**答案：**
+
+```js
+// preload.js
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("electronAPI", {
+  sendMessage: (msg) => ipcRenderer.send("message", msg),
+  onReply: (callback) => ipcRenderer.on("reply", callback),
+});
+```
+
+### 26. 渲染进程如何安全调用主进程 API？
+
+**答案：** 通过 `contextBridge` 暴露方法，禁止直接在渲染进程使用 `ipcRenderer`。
+
+### 27. 主进程如何主动向渲染进程发送消息？
+
+**答案：** `win.webContents.send("message", "内容")`。
+
+### 28. 多个渲染进程之间如何通信？
+
+**答案：** 主进程中转：渲染进程 1 → 主进程 → 渲染进程 2。
+
+### 29. remote 模块为什么被废弃？
+
+**答案：** 存在严重安全漏洞，容易导致渲染进程直接获取主进程权限，被 `ipcMain.handle` + `contextBridge` 替代。
+
+### 30. 如何在渲染进程获取窗口对象？
+
+**答案：** 主进程通过 IPC 暴露方法，禁止直接获取 `BrowserWindow` 实例。
+
+### 31. IPC 通信的数据类型限制？
+
+**答案：** 支持 JSON 序列化的所有类型（字符串、数字、对象、数组），不支持函数、Symbol。
+
+### 32. 如何监听 IPC 连接断开？
+
+**答案：** `ipcRenderer.on("ipc-disconnect", callback)`。
+
+### 33. 什么是 webContents？作用？
+
+**答案：** 渲染进程的控制器，主进程通过它控制渲染进程（发送消息、执行 JS、刷新页面）。
+
+### 34. 如何在主进程执行渲染进程的 JS 代码？
+
+**答案：**
+
+```js
+win.webContents.executeJavaScript('console.log("主进程执行渲染进程JS")');
+```
+
+### 35. Preload 脚本能访问 Node.js API 吗？
+
+**答案：** 可以，Preload 默认有权限访问 Node.js 和 Electron API。
+
+### 36. 如何防止 IPC 通信被劫持？
+
+**答案：** 开启上下文隔离、关闭 Node 集成、仅暴露必要 API、验证所有输入参数。
+
+### 37. 异步 IPC 和同步 IPC 的区别？
+
+**答案：**
+
+- 同步：阻塞渲染进程，不推荐。
+- 异步：非阻塞，性能更好，官方推荐。
+
+### 38. 如何传递大数据通过 IPC？
+
+**答案：** 分块传输、使用文件中转、压缩数据。
+
+### 39. 渲染进程能直接访问 app 对象吗？
+
+**答案：** 不能，必须通过主进程 IPC 中转。
+
+### 40. 主进程如何获取所有渲染进程？
+
+**答案：** `BrowserWindow.getAllWindows()`，遍历获取 `webContents`。
+
+## 三、Electron 核心 API（41–60 题）
+
+### 41. 如何创建托盘图标（Tray）？
+
+**答案：**
+
+```js
+const { Tray, Menu } = require("electron");
+
+const tray = new Tray("icon.png");
+const contextMenu = Menu.buildFromTemplate([
+  { label: "退出", click: () => app.quit() },
+]);
+
+tray.setContextMenu(contextMenu);
+```
+
+### 42. 如何创建应用菜单（Menu）？
+
+**答案：**
+
+```js
+const { Menu } = require("electron");
+
+const menu = Menu.buildFromTemplate([
+  { label: "文件", submenu: [{ label: "打开" }] },
+]);
+
+Menu.setApplicationMenu(menu);
+```
+
+### 43. 如何打开文件选择对话框？
+
+**答案：**
+
+```js
+const { dialog } = require("electron");
+
+const { filePaths } = await dialog.showOpenDialog({
+  properties: ["openFile"],
+});
+```
+
+### 44. 如何打开保存文件对话框？
+
+**答案：** `dialog.showSaveDialog()`。
+
+### 45. 如何弹出消息提示框？
+
+**答案：** `dialog.showMessageBox({ type: "info", message: "提示" })`。
+
+### 46. 如何获取系统剪贴板内容？
+
+**答案：**
+
+```js
+const { clipboard } = require("electron");
+
+clipboard.writeText("复制内容");
+clipboard.readText(); // 获取内容
+```
+
+### 47. 如何实现窗口拖拽功能？
+
+**答案：** HTML 元素添加 `-webkit-app-region: drag` 样式。
+
+### 48. 如何禁用窗口缩放？
+
+**答案：** `new BrowserWindow({ resizable: false })`。
+
+### 49. 如何设置窗口全屏？
+
+**答案：** `win.setFullScreen(true)`。
+
+### 50. 如何监听窗口大小变化？
+
+**答案：** `win.on("resize", callback)`。
+
+### 51. 如何打开外部链接（默认浏览器）？
+
+**答案：**
+
+```js
+const { shell } = require("electron");
+
+shell.openExternal("https://www.baidu.com");
+```
+
+### 52. 如何操作本地文件（读取 / 写入）？
+
+**答案：** 通过 Node.js `fs` 模块，主进程或 Preload 中使用。
+
+### 53. 如何获取应用路径？
+
+**答案：** `app.getPath("userData")`（用户数据目录）、`app.getAppPath()`（应用根目录）。
+
+### 54. 如何实现应用自动更新？
+
+**答案：** `electron-updater` 库，主进程监听 `update-available` 事件。
+
+### 55. 如何注册全局快捷键？
+
+**答案：**
+
+```js
+const { globalShortcut } = require("electron");
+
+app.whenReady().then(() => {
+  globalShortcut.register("Ctrl+X", () => {
+    console.log("快捷键触发");
+  });
+});
+```
+
+### 56. 如何注销全局快捷键？
+
+**答案：** `globalShortcut.unregister("Ctrl+X")` / `globalShortcut.unregisterAll()`。
+
+### 57. 什么是 shell 模块？作用？
+
+**答案：** 提供桌面集成能力，打开文件、打开外部链接、显示文件在文件夹中。
+
+### 58. 如何实现窗口置顶？
+
+**答案：** `win.setAlwaysOnTop(true)`。
+
+### 59. 如何获取屏幕信息？
+
+**答案：**
+
+```js
+const { screen } = require("electron");
+
+const primaryDisplay = screen.getPrimaryDisplay();
+const { width, height } = primaryDisplay.workAreaSize;
+```
+
+### 60. 如何实现应用内截图？
+
+**答案：** `webContents.capturePage()`，返回图片 Buffer。
+
+## 四、安全与优化（61–80 题）
+
+### 61. Electron 最核心的安全配置是什么？
+
+**答案：**
+
+1. `contextIsolation: true`。
+2. `nodeIntegration: false`。
+3. `enableRemoteModule: false`。
+4. 验证所有 IPC 输入。
+
+### 62. 什么是 CSP？Electron 中如何配置？
+
+**答案：** 内容安全策略，防止 XSS 攻击，在 HTML 头部添加：
+
+```html
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'" />
+```
+
+### 63. 如何防止 Electron 应用被调试？
+
+**答案：** 生产环境禁用开发者工具：
+
+```js
+win.webContents.on("devtools-opened", () => win.webContents.closeDevTools());
+```
+
+### 64. 什么是 ASAR 打包？作用？
+
+**答案：** Electron 的文件归档格式，将应用文件打包成单个文件，提升加载速度、保护源码。
+
+### 65. 如何优化 Electron 应用体积？
+
+**答案：**
+
+1. 移除依赖冗余包。
+2. 使用 `electron-builder` 压缩。
+3. 剔除开发依赖。
+4. 按需加载资源。
+
+### 66. 如何优化 Electron 应用启动速度？
+
+**答案：**
+
+1. 延迟加载非核心组件。
+2. 预加载必要资源。
+3. 减小窗口初始化体积。
+4. 使用 ASAR 打包。
+
+### 67. 如何处理 Electron 的内存泄漏？
+
+**答案：**
+
+1. 及时注销 IPC 监听。
+2. 销毁无用窗口。
+3. 避免全局变量滥用。
+4. 使用 Chrome DevTools 内存分析。
+
+### 68. 为什么不能在渲染进程直接使用 Node.js？
+
+**答案：** XSS 攻击可直接调用 `fs` / `child_process` 等 API，窃取系统文件、执行恶意代码。
+
+### 69. 如何加密 Electron 应用源码？
+
+**答案：** `bytenode` 编译、`electron-packager` 加密、ASAR 加密。
+
+### 70. 什么是 webSecurity？如何配置？
+
+**答案：** 开启网页安全策略，默认 `true`，禁止跨域访问本地文件，生产环境必须开启。
+
+### 71. 如何防止 Electron 应用多开？
+
+**答案：** `app.requestSingleInstanceLock()`，获取锁失败则退出应用。
+
+### 72. Electron 常见的安全漏洞有哪些？
+
+**答案：** XSS 攻击、远程代码执行、IPC 劫持、源码泄露、调试端口暴露。
+
+### 73. 如何验证 IPC 通信的合法性？
+
+**答案：** 主进程校验所有来自渲染进程的参数、白名单过滤、禁止执行动态代码。
+
+### 74. 什么是沙箱模式？Electron 支持吗？
+
+**答案：** 渲染进程运行在沙箱中，限制系统权限，Electron 支持 `sandbox: true` 配置。
+
+### 75. 如何关闭 Electron 的硬件加速？
+
+**答案：** `app.disableHardwareAcceleration()`，解决部分电脑兼容性问题。
+
+### 76. 如何处理 Electron 的跨域问题？
+
+**答案：** 开发环境配置 `webSecurity: false`，生产环境使用代理、CORS、本地接口转发。
+
+### 77. 如何提升 Electron 页面渲染性能？
+
+**答案：** 虚拟列表、懒加载、减少 DOM 操作、关闭不必要的动画。
+
+### 78. 什么是上下文桥（contextBridge）？原理？
+
+**答案：** 安全暴露 API 给渲染进程，创建隔离的全局对象，不直接暴露 Node.js API。
+
+### 79. 如何记录 Electron 应用日志？
+
+**答案：** `electron-log` 库，写入本地文件，支持主进程 / 渲染进程。
+
+### 80. 如何适配不同 DPI 的屏幕？
+
+**答案：** `win.webContents.setZoomFactor(1.0)`，监听屏幕 DPI 变化动态调整缩放。
+
+## 五、打包部署（81–90 题）
+
+### 81. Electron 常用打包工具有哪些？
+
+**答案：** `electron-builder`（推荐）、`electron-packager`、`electron-forge`。
+
+### 82. electron-builder 的核心配置文件是什么？
+
+**答案：** `package.json` 中的 `build` 字段。
+
+### 83. 如何打包 Windows 应用？
+
+**答案：** 配置 `win` 字段，执行 `electron-builder --win`。
+
+### 84. 如何打包 macOS 应用？
+
+**答案：** 配置 `mac` 字段，执行 `electron-builder --mac`，需要苹果开发者证书。
+
+### 85. 如何打包 Linux 应用？
+
+**答案：** 配置 `linux` 字段，执行 `electron-builder --linux`。
+
+### 86. 打包后的应用体积过大如何解决？
+
+**答案：** 压缩资源、移除冗余依赖、使用精简版 Electron、拆分安装包。
+
+### 87. 如何配置应用图标？
+
+**答案：** `build.icon` 字段指定图标路径，Windows 支持 `.ico`，macOS 支持 `.icns`。
+
+### 88. 如何实现安装包自定义安装路径？
+
+**答案：** `electron-builder` 配置 `nsis.allowToChangeInstallationDirectory: true`。
+
+### 89. 打包后如何调试应用？
+
+**答案：** 添加命令行参数 `--devtools`，或主进程代码打开开发者工具。
+
+### 90. 如何实现应用自动更新（electron-updater）？
+
+**答案：**
+
+```js
+const { autoUpdater } = require("electron-updater");
+
+autoUpdater.checkForUpdatesAndNotify();
+autoUpdater.on("update-downloaded", () => autoUpdater.quitAndInstall());
+```
+
+## 六、进阶实战（91–100 题）
+
+### 91. 如何实现多窗口管理？
+
+**答案：** 创建窗口实例数组，统一管理创建、销毁、通信。
+
+### 92. 如何实现 Electron + Vue/React 开发？
+
+**答案：** `electron-vite`、`vue-cli-plugin-electron-builder`、`create-react-app` + Electron。
+
+### 93. 如何在 Electron 中使用数据库？
+
+**答案：** `sqlite3`、`lowdb`、IndexedDB，主进程操作数据库，渲染进程 IPC 调用。
+
+### 94. 如何实现 Electron 应用开机自启？
+
+**答案：**
+
+```js
+app.setLoginItemSettings({
+  openAtLogin: true,
+  path: app.getPath("exe"),
+});
+```
+
+### 95. 如何实现进程守护（防止应用崩溃）？
+
+**答案：** `child_process` 创建守护进程，监听主进程崩溃自动重启。
+
+### 96. Electron 和 Flutter Desktop 的区别？
+
+**答案：**
+
+- Electron：Web 技术栈，开发快，体积大。
+- Flutter Desktop：原生渲染，性能好，学习成本高。
+
+### 97. 如何实现离线应用？
+
+**答案：** 本地缓存静态资源、使用本地数据库、断网状态提示。
+
+### 98. 如何处理 Electron 应用的权限申请？
+
+**答案：** macOS 需要配置 `info.plist` 权限，Windows 自动申请，Linux 通过系统弹窗。
+
+### 99. 如何实现 Electron 应用的国际化？
+
+**答案：** `i18next` + `electron-store`，动态切换语言文件。
+
+### 100. 一个完整的安全 Electron 应用架构是什么？
+
+**答案：**
+
+1. 主进程：窗口管理、系统 API、IPC 监听。
+2. Preload：安全桥接，暴露有限 API。
+3. 渲染进程：纯 UI，不直接访问 Node.js。
+4. 安全配置：上下文隔离 + 关闭 Node 集成 + CSP。
+5. 打包：ASAR 加密 + 代码压缩 + 自动更新。
+
+## 核心总结
+
+1. **安全第一**：上下文隔离、关闭 Node 集成、Preload 桥接是 Electron 开发铁律。
+2. **通信核心**：异步 IPC（`invoke` / `handle`）是官方推荐的进程通信方式。
+3. **打包首选**：`electron-builder` 一站式打包，支持全平台。
+4. **性能优化**：ASAR 打包、懒加载、内存管理是提升体验的关键。
+5. **面试高频**：进程模型、IPC 通信、安全配置、打包部署是必考点。

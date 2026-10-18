@@ -2,7 +2,7 @@
 
 > 树脂的个人技术笔记站 —— 记录 AI Agent 与 LLM 应用的工程化实践，以及 TypeScript / Next.js 全栈落地经验。
 
-一个由 [Fumadocs](https://fumadocs.dev) 驱动的静态文档站：首页全屏视频 Hero + 四个内容分类 + 全文搜索，同时对搜索引擎和 LLM 友好（自动生成 `llms.txt`、支持 Markdown 内容协商、按页生成 OG 分享图）。
+一个由 [Fumadocs](https://fumadocs.dev) 驱动的静态文档站：首页全屏视频 Hero + 五个内容分类下拉导航 + 全文搜索，同时对搜索引擎和 LLM 友好（自动生成 `llms.txt`、支持 Markdown 内容协商、按页生成 OG 分享图）。
 
 ## 技术栈
 
@@ -21,12 +21,13 @@
 ```
 resinalgo/
 ├── content/docs/            # 所有文档内容（唯一的内容源）
-│   ├── meta.json            # 顶层排序：index, feelings, engineering, stack, algo
+│   ├── meta.json            # 文档侧边栏排序：index, feelings, engineering, stack, algo, agent
 │   ├── index.mdx            # /docs 首页
 │   ├── feelings/            # 感触
 │   ├── engineering/         # 工程化
 │   ├── stack/               # 技术栈
-│   └── algo/                # 算法
+│   ├── algo/                # 算法
+│   └── agent/               # Agent
 ├── public/
 │   ├── img/                 # 文档配图，按 /img/xxx.jpg 引用
 │   └── hero.mp4|webm|poster # 首页 Hero 视频（环境变量未配置时的兜底）
@@ -44,6 +45,7 @@ resinalgo/
 │   ├── components/home/     # Hero 相关组件（头像、状态栏、装饰线）
 │   ├── lib/
 │   │   ├── shared.ts        # ★ 全站配置中枢
+│   │   ├── navigation.ts    # 栏目配置 + 文档页面树转下拉菜单
 │   │   ├── source.ts        # 内容源适配（loader）
 │   │   └── layout.shared.tsx# 导航栏 / 布局选项
 │   ├── proxy.ts             # 内容协商（Next 16 起 middleware.ts 更名）
@@ -51,7 +53,7 @@ resinalgo/
 └── .env.example             # 环境变量样例
 ```
 
-**改动优先级**：调站名 / 导航 / 路由 → `src/lib/shared.ts`；调导航渲染方式 → `src/lib/layout.shared.tsx`；调内容 → `content/docs/`；调视觉细节 → `src/app/global.css`。
+**改动优先级**：调站名 / 路由 → `src/lib/shared.ts`；调首页栏目名称 / 顺序 / 简介 → `src/lib/navigation.ts`；调导航渲染方式 → `src/lib/layout.shared.tsx`；调内容 → `content/docs/`；调视觉细节 → `src/app/global.css`。
 
 ## 快速开始
 
@@ -152,7 +154,11 @@ copy .env.example .env.local # Windows CMD
 
    切勿写 `C:/Users/...` 这类本地绝对路径 —— 部署后必然 404。
 
-4. **（可选）新增分类**：在 `src/lib/shared.ts` 的 `categories` 数组里追加一项，导航栏和排序会同步生效。
+4. **（可选）新增分类**：在 `src/lib/navigation.ts` 的 `categories` 数组里配置 `slug`、`title`、`description`，建立对应文档目录和 `index.mdx`，再把目录名加入 `content/docs/meta.json` 的侧边栏排序。首页导航自动生成该栏目的下拉菜单，桌面与移动端共用同一份数据。
+
+下拉文章直接读取 Fumadocs 页面树，标题与简介来自文章 frontmatter，顺序沿用各目录的 `meta.json`。新增文章只需维护文档目录，无需再手写导航链接。
+
+下拉列表只展示文章标题；`src/lib/navigation.ts` 的 `navigationDropdown` 统一控制面板宽高（默认 240 × 224 px）。超出后在面板内滚动，列表支持悬停高亮与键盘聚焦。
 
 ## 站点特性说明
 
