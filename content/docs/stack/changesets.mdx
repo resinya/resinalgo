@@ -1,0 +1,73 @@
+---
+title: changesets
+description: changesets 是一个用于管理包版本和生成变更日志（Changelog）的工具，特别适合 Monorepo（多包仓库）场景。它的核心思想是将“代码修改”与“版本决策”分离：开发者在提交代码时，只需声明改动的影响范围（哪个包）和严重程度（版本号如何变化），而将更新 package.json 版本号和生成 Changelog 的工作留给自动化流程处理
+---
+
+# 🔄 核心使用流
+
+整个流程围绕 初始化 → 添加变更声明 → 版本更新 → 发布 这几个步骤循环进行。
+
+## 初始化
+
+# 安装为开发依赖
+
+```js
+pnpm add -Dw @changesets/cli
+生成 .changeset 文件夹和 config.json
+pnpm changeset init
+```
+
+> 初始化后，项目中会多出一个 .changeset 目录，用于存放所有的变更描述文件。
+
+## 开发时：添加变更描述 (Changeset)
+
+> 每当你完成一项需要发布的改动（如新功能、Bug 修复），就运行命令生成一个变更描述文件。执行`pnpm changest`
+> CLI 会进行交互式提问：
+
+1. 选择受影响的包：在 Monorepo 中，用方向键选择本次改动涉及的包。
+2. 选择版本升级类型：为每个选中的包决定语义化版本（Semver）的升级级别：patch (修复)、minor (新功能)、major (破坏性变更)。
+3. 填写变更摘要：输入一段描述，这段文字之后会被写入 Changelog 中。
+
+完成后，.changeset 目录下会生成一个随机命名的 Markdown 文件，其内容结构如下：
+
+```markdown
+---
+"pkg-a": minor
+"pkg-b": patch
+---
+
+这是一个新功能的描述，将出现在 Changelog 中。
+```
+
+请注意：这个生成的文件必须和代码改动一起提交到 Git 仓库。
+
+## 发布前：更新版本与 Changelog
+
+当积累了一些 changeset 并准备发布时，运行 version 命令。运行`pnpm changeset version`
+这个命令会读取 .changeset 目录下的所有变更描述，然后自动完成两件事：
+
+- 更新版本号：根据 changeset 中声明的级别，提升对应 package.json 的 version 字段。如果存在内部依赖，它还会自动更新依赖的版本范围。
+- 生成 Changelog：将 changeset 中的摘要内容写入对应包的 CHANGELOG.md 文件。
+  执行完毕后，所有本次被消费的 changeset 文件会被自动删除，确保它们只被使用一次。
+
+你需要审查这些自动生成的版本号和 Changelog 改动，确认无误后提交
+
+## 发布：推送到 npm
+
+最后，运行 publish 命令将新版本发布出去。`pnpm changeset publish`
+该命令会发布所有版本号已被更新、且尚未发布到 npm 的包，并自动为每个包创建对应的 Git tag（如 pkg-a@1.1.0）。记得将 tag 推送到远程仓库：`git push --follow-tags`
+
+# 💡 一个具体示例：Monorepo 中的联动
+
+假设你的仓库有两个包：@my/ui（组件库）和 @my/app（应用，依赖 @my/ui）。
+
+1. 改动：你为 @my/ui 添加了一个新组件（minor 级变更）。
+2. 添加 Changeset：运行 pnpm changeset，选择 @my/ui，升级类型选 minor，并填写摘要“新增 Button 组件”。
+3. 发布时执行 version：pnpm changeset version 不仅会将 @my/ui 的版本从 1.0.0 提升到 1.1.0，还会自动检测到 @my/app 依赖了 @my/ui，并相应地更新 @my/app 的 package.json 中的依赖版本，以确保应用能引用到新组件。这是 Changesets 在 Monorepo 中处理内部依赖联动的核心优势0。
+
+# ⚙️ 进阶：与 GitHub Actions 集成实现自动化
+
+- 手动执行上述步骤容易出错，推荐与 CI 集成。通过官方的 changesets/action，可以实现全自动化：
+- 开发者只需在 PR 中提交代码和对应的 changeset 文件。
+- 当包含 changeset 的 PR 被合并到主分支后，Action 会自动创建一个新的“Version Packages” PR，里面包含了 changeset version 生成的所有版本号和 Changelog 改动。
+- 当维护者合并这个“Version Packages” PR 时，Action 便会自动执行 publish 命令，将包发布到 npm。
