@@ -1,0 +1,54 @@
+---
+title: 哈希
+description: leetcode100哈希
+---
+
+# 两数之和
+
+1. 暴力解法
+   双重for循环，外层`i=0`开始，内层`j=i+1`开始，`nums[i]+nums[j] === target`
+2. 哈希表
+   map.has(target-nums[i])?return [map.get(nums[i]),i]:map.set(nums[i],i)
+
+# 最长连续序列
+
+非常建议各位写每一个题的时候使用暴力解法去做一遍，
+
+1. 暴力
+
+```
+let ans = 0
+for(const num of nums)
+let cur = num,len = 1
+while(nums.includes(cur+1))cur++,len++
+Math.max(ans,len)
+```
+
+2. hash
+   从暴力解决while循环过程中，我们是不是能发现它本质上还是要看nums是否包含当前数值加1的这个值,那么我们就可以把这个东西去变成一个集合去做判断
+
+```
+function longestConsecutive(nums) {
+   const set = new Set(nums)
+   let ans = 0
+   for(const num of nums){
+      if(set.has(num-1)) continue
+      let temp = num
+      while(set.has(temp+1)){
+         //5-6,不包括8，当temp+1===7的时候，
+         temp++//5
+         //temp===6
+      }
+       Math.max(ans,temp-num+1)
+   }
+   return ans
+}
+
+```
+
+1. 一开始用 nums.includes：能跑但慢，且重复计算。换 Set 是第一个转折。
+2. 忘了判断起点：[1,2,3,4] 会退化 O(n²)。加 if (set.has(x - 1)) continue 是第二个转折。
+3. 遍历 nums 还是 set：遍历 nums 也能过，但有重复数字会做无用功；遍历 set 更干净。
+4. 长度算错：y - x + 1，别忘了 +1，因为两端都算。
+5. 空数组：不特判的话，Math.max(0, ...) 其实也能返回 0，但显式写 if (nums.length === 0) return 0 更稳，也表达清楚边界。
+6. 负数、大数：Set 和 +1/-1 都天然支持，不用特殊处理。
