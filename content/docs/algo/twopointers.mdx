@@ -2,3 +2,21 @@
 title: 双指针
 description: leetcode100双指针
 ---
+
+# 移动零
+
+有关数组题，大概率用双指针写
+这个典型要找到一个是0，一个不是0的数。先试试快慢指针
+slow指针可以代表什么？第一个零的位置？下一个非零元素放的位置？
+fast指针可以代表什么？遍历一下看到第一个不是零的元素
+
+```js
+let slow,fast=0
+for(fast<nums.length;fast++)
+if(nums[fast]!==0){
+    [nums[fast],nums[slow]]=[[nums[slow],nums[fast]]]
+    slow++
+}
+```
+
+> 如果f，s为0，f++，把s留在原地，如果f不为0且s也不为0，那就一起++，如果f不为0，s为0，那就说明找到了，交换
