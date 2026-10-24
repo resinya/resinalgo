@@ -1,0 +1,70 @@
+---
+title: 微前端
+description: 本文讲述无界微前端框架
+---
+
+# webComponent
+
+## 基本原理
+
+```js
+//index.js
+window.onload=()=>{
+    class Wujie extends HTMLElement{
+        constructor(){
+            super()
+            //shadowdom 样式隔离
+          let dom = this.attachShadow({mode:"open"})
+          let template = document.querySelector("#wujie")
+          dom.appendChild(template.content.cloneNode(true))
+        }
+        console.log(this.getAttr('url))//api/wujie
+
+        private getAttr(attr:string){
+            retunr this.getAttribute(attr)//接收参数方法
+        }
+        //生命周期
+        connectedCallback(){
+            //创建
+        }
+        disconnectedCallback(){
+            //销毁
+        }
+        attributeChangedCallback(){
+            //类似vue的watch
+        }
+    }
+    //类似于Vue组件，原生js写的组件
+    window.customElements.define('wu-jie',Wujie)
+}
+```
+
+```js
+//index.html
+<script src='./index.js'/>
+<wu-jie age="18" url="api/wujie"></wu-jie>
+//给组件传参
+<template id="wujie">
+    <div style="bg:red">
+        我是红色
+    </div>
+</template>
+
+    <div>
+        我是默认颜色
+    </div>
+```
+
+## pnpm+monorepo
+
+### pnpm的软硬链接
+
+1. 硬链接
+   ![](/pnpm_01.png)
+   修改index.js会导致ying.js也跟着改变
+2. 软链接
+   ![](/pnpm_02.png)
+3. 软硬链接
+   ![](/pnpm_03.png)
+
+### monorepo架构
