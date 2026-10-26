@@ -20,3 +20,39 @@ if(nums[fast]!==0){
 ```
 
 > 如果f，s为0，f++，把s留在原地，如果f不为0且s也不为0，那就一起++，如果f不为0，s为0，那就说明找到了，交换
+
+# 三数之和
+
+就是一个外层循环，内层while(l<r)
+然后注意去重，当计算`l+r+i===taregt`的时候。先push进结果，然后
+`while(l<r&&nums[l]===nums[l+1])l++`,
+` while(l<r&&nums[r]===nums[r-1])r--`，最后一定还要l++,r--
+
+# 接雨水
+
+核心思路就是给height左右两边添加0作为边界，然后一次计算两个边界里面的盛水量。
+从左到右
+
+```js
+let l,sum=0
+//r是快指针，用来判断height[r]>=height[l]的，如果大于，说明两个边界中可以装水
+for(let r=0;r<height.length;r++){
+    if(height[r]>=height[l]){
+         res += h[l] * (r - l - 1) - sum;//计算当前水量
+        l=r//更新l
+        sum=0//重置
+    }else{
+        sum++height[r]//这个容器中间会有其他占位
+    }
+    //当中间碰到最高，也就是height[l]最大了
+    r=height.length-1
+    sum=0
+    for(let i=r;i>=l;i--){
+        res+=xxx
+        r=i
+        sum=0
+    }else{
+        sum+=height[i]
+    }
+}
+```
