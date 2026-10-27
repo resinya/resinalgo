@@ -1,5 +1,5 @@
 {
   "title": "算法",
   "description": "算法思路",
-  "pages": ["index", "array", "dp", "hash", "twopointers"]
+  "pages": ["index", "array", "dp", "hash", "twopointers", "slidingwindow"]
 }

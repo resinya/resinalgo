@@ -1,0 +1,102 @@
+---
+title: 滑动窗口
+description: leetcode100滑动窗口
+---
+
+# 找到字符串中所有字母异位词
+
+1. 暴力解法
+   s是长的，p是短的
+   先统计字符长度小的，用map记录，然后外层循环遍历，`i<=s.len-p.len`，定义指针
+   `l=i`,`r=i+p.len-1`，内层while循环去判断`l<=r`,如果map.get(s[l]),map.set(xx,-1),l++
+   如果不存在，直接brack退出循环。那么怎么判断是否执行了p.length次，定义一个count去判断
+   这种方法，map要每次i变化的时候都要重置
+
+```
+var findAnagrams = function(s, p) {
+    const map = new Map()
+    function reset(map){
+        map.clear()
+        for(let i=0;i<p.length;i++){
+        map.set(p[i], (map.get(p[i]) || 0) + 1)
+        }
+    }
+     let res=[]
+    for(let i=0;i<=s.length-p.length;i++){
+        reset(map)
+        let l=i;
+        let r=i+p.length-1
+        let count = 0
+        while(l<=r){
+            //<=?
+            if(map.get(s[l])){
+                map.set(s[l],map.get(s[l])-1)
+                count++
+                l++
+            }else{
+                break
+            }
+        }
+        if(count===p.length){
+            res.push(i)
+        }
+    }
+    return res
+};
+```
+
+2. 优秀解法
+   > 固定滑动窗口模板
+
+```js
+function fixedWindow(nums,k){
+    let l=0
+    let sum==0
+    let res=-Infinity
+    for(let r=0;r<nums.length;r++){
+        //进窗口
+        //xxx
+        if(r-l+1===k){
+            //出窗口
+            //xxx
+            //移除nums[l]的元素
+            //l++ 指针移动
+        }
+    }
+}
+```
+
+```js
+var findAnagrams = function (s, p) {
+  const res = [];
+  const m = s.length,
+    n = p.length;
+  if (m < n) return res;
+
+  const need = new Map();
+  for (const c of p) need.set(c, (need.get(c) || 0) + 1);
+
+  const win = new Map();
+  let left = 0,
+    valid = 0;
+
+  for (let right = 0; right < m; right++) {
+    const c = s[right];
+    if (need.has(c)) {
+      win.set(c, (win.get(c) || 0) + 1);
+      if (win.get(c) === need.get(c)) valid++; // 该字符刚好满足
+    }
+
+    if (right - left + 1 === n) {
+      if (valid === need.size) res.push(left); // 全部字符满足
+
+      const d = s[left++];
+      if (need.has(d)) {
+        if (win.get(d) === need.get(d)) valid--; // 移出前破坏满足
+        win.set(d, win.get(d) - 1);
+      }
+    }
+  }
+  return res;
+};
+```
