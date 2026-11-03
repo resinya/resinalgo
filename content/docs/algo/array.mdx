@@ -2,3 +2,47 @@
 title: 数组
 description: 动态规划题解与思路梳理
 ---
+
+# 最大子数组和
+
+看到连续子数组，最大值，直接想到前缀和
+
+1. 直接暴力解法，两个for循环
+2. 以当前索引结尾的最大子数组和是多少？
+
+```js
+f(i)=Math.max(f(i-1)+nums[i],nums[i])
+res = Mth,max(f(i),f(2)...)
+```
+
+> f(i) 只依赖 f(i-1)，所以不需要数组存所有状态，用一个变量 sum 滚动即可
+> 同时用 ans 记录所有 f(i) 中的最大值。
+
+```js
+var maxSubArray = function (nums) {
+  let ans = nums[0];
+  let sum = 0;
+
+  for (let num of nums) {
+    sum = Math.max(num, sum + num); // f(i)
+    ans = Math.max(ans, sum); // 记录全局最大
+  }
+
+  return ans;
+};
+```
+
+> 较为好理解的
+
+```js
+let sum = 0; //先定义最大前缀和
+let ans = nums[0];
+for (const num of nums) {
+  if (sum + num < num) {
+    sum = num;
+  } else {
+    sum += num;
+  }
+  ans = Math.max(sum, ans);
+}
+```

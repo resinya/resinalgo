@@ -23,7 +23,7 @@ if(nums[fast]!==0){
 
 # 三数之和
 
-就是一个外层循环，内层while(l<r)
+就是一个外层循环，内层`while(l<r)`
 然后注意去重，当计算`l+r+i===taregt`的时候。先push进结果，然后
 `while(l<r&&nums[l]===nums[l+1])l++`,
 ` while(l<r&&nums[r]===nums[r-1])r--`，最后一定还要l++,r--
